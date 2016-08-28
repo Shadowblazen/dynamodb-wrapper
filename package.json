@@ -1,6 +1,6 @@
 {
   "name": "dynamodb-wrapper",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A DynamoDB library that extends aws-sdk with bulk read/write, events, streams, and more",
   "repository": {
     "type": "git",
