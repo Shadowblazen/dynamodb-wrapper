@@ -1,0 +1,18 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# MAC OSX
+.DS_Store
+
+# Webstorm
+.idea
+
+# Dependency
+node_modules/
+
+# Project files
+lib/**/*.js
+dist/
+coverage/
