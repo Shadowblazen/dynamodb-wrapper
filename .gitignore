@@ -14,5 +14,5 @@ node_modules/
 
 # Project files
 lib/**/*.js
-dist/
+bin/
 coverage/

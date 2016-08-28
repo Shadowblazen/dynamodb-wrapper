@@ -8,8 +8,13 @@
   },
   "main": "index.js",
   "scripts": {
+    "prepublish": "gulp",
     "test": "gulp test"
   },
+  "files": [
+    "index.js",
+    "bin"
+  ],
   "keywords": [
     "aws",
     "dynamodb",

@@ -20,17 +20,16 @@ var jasmine = require('./tools/jasmine-runner');
 gulp.task('default', function (done) {
     runSequence(
         'lint',
-        'build.dev',
+        'build',
         'test.coverage',
-        'build.prod',
         done
     );
 });
 
-gulp.task('start', ['build.dev', 'lint.dev', 'watch.lib']);
+gulp.task('start', ['build', 'lint', 'watch.lib']);
 
 gulp.task('test', function () {
-    return gulp.src('dist/dev/**/*spec.js').pipe(jasmine());
+    return gulp.src('bin/**/*spec.js').pipe(jasmine());
 });
 
 gulp.task('test.coverage', function (done) {
@@ -43,65 +42,32 @@ gulp.task('test.coverage', function (done) {
 });
 
 /*********************************************************************************************************************
- * Create Production Build
+ * Create Build Package
  *********************************************************************************************************************/
 
-gulp.task('build.prod', function (done) {
+gulp.task('build', function (done) {
     runSequence(
-        'clean.prod',
-        ['transpile.prod', 'copy.assets.prod'],
+        'clean',
+        ['transpile', 'copy.assets'],
         done
     );
 });
 
-gulp.task('transpile.prod', function () {
-    var tsProject = tsc.createProject('tsconfig.json', { typescript: typescript });
-
-    return gulp.src([
-            'lib/**/*.ts',
-            '!lib/**/*spec.ts',
-            '!lib/test/**/*'
-        ])
-        .pipe(tsc(tsProject))
-        .pipe(gulp.dest('dist/prod'));
-});
-
-gulp.task('copy.assets.prod', function () {
-    return gulp.src(['lib/**/*.json'])
-        .pipe(gulp.dest('dist/prod'));
-});
-
-gulp.task('clean.prod', function (done) {
-    cleanDir('dist/prod', done);
-});
-
-/*********************************************************************************************************************
- * Create Dev Build
- *********************************************************************************************************************/
-
-gulp.task('build.dev', function (done) {
-    runSequence(
-        'clean.dev',
-        ['transpile.dev', 'copy.assets.dev'],
-        done
-    );
-});
-
-gulp.task('transpile.dev', function () {
+gulp.task('transpile', function () {
     var tsProject = tsc.createProject('tsconfig.json', { typescript: typescript });
 
     return gulp.src(['lib/**/*.ts', 'test/**/*.ts'])
         .pipe(tsc(tsProject))
-        .pipe(gulp.dest('dist/dev'));
+        .pipe(gulp.dest('bin'));
 });
 
-gulp.task('copy.assets.dev', function () {
-    return gulp.src(['lib/**/*.json', 'tools/**/*.js'])
-        .pipe(gulp.dest('dist/dev'));
+gulp.task('copy.assets', function () {
+    return gulp.src(['tools/**/*.js'])
+        .pipe(gulp.dest('bin'));
 });
 
-gulp.task('clean.dev', function (done) {
-    cleanDir('dist/dev', done);
+gulp.task('clean', function (done) {
+    cleanDir('bin', done);
 });
 
 /*********************************************************************************************************************
@@ -110,12 +76,11 @@ gulp.task('clean.dev', function (done) {
 
 gulp.task('pretest.coverage.instrumentation', function () {
     var filesGlob = [
-        'dist/dev/**/*.js',
+        'bin/**/*.js',
 
         // ignore test-related files
-        '!dist/dev/**/*.spec.js',
-        '!dist/dev/jasmine-runner.js',
-        '!dist/dev/test/**/*'
+        '!bin/**/*.spec.js',
+        '!bin/jasmine-runner.js'
     ];
 
     return gulp.src(filesGlob)
@@ -126,11 +91,11 @@ gulp.task('pretest.coverage.instrumentation', function () {
 });
 
 gulp.task('posttest.coverage.reports', function () {
-    return gulp.src(['dist/**/*.spec.js'])
+    return gulp.src(['bin/**/*.spec.js'])
         .pipe(istanbul.writeReports());
 });
 
-gulp.task('lint.dev', function () {
+gulp.task('lint.noerror', function () {
     return gulp.src('lib/**/*.ts')
         .pipe(tslint({
             formatter: 'verbose'
@@ -149,26 +114,7 @@ gulp.task('lint', function () {
 });
 
 gulp.task('watch.lib', function () {
-    gulp.watch(['lib/**/*.ts'], ['build.dev', 'lint.dev']);
-});
-
-gulp.task('pre-commit', function (done) {
-    runSequence(
-        'lint',
-        'build.dev',
-        'test.coverage',
-        'build.prod',
-        done
-    );
-});
-
-gulp.task('postinstall', ['install.pre-commit']);
-
-gulp.task('install.pre-commit', function (next) {
-    var isWin = /^win/.test(process.platform);
-    if (!isWin) {
-        execChildProcess('sh pre-commit-install.sh', next);
-    }
+    gulp.watch(['lib/**/*.ts'], ['build', 'lint.noerror']);
 });
 
 /*********************************************************************************************************************
@@ -178,25 +124,5 @@ gulp.task('install.pre-commit', function (next) {
 function cleanDir(dir, done) {
     del(dir).then(function () {
         done();
-    });
-}
-
-function execChildProcess(cmd, cb) {
-    if (Object.prototype.toString.call(cmd) === '[object Array]') {
-        cmd = cmd.join(' && ');
-    }
-
-    var childProcess = exec(cmd);
-
-    childProcess.stdout.on('data', function (data) {
-        console.log(data.toString().replace(/\n$/, ''));
-    });
-
-    childProcess.stderr.on('data', function (data) {
-        console.log(data.toString().replace(/\n$/, ''));
-    });
-
-    childProcess.on('exit', function () {
-        cb && cb();
     });
 }
