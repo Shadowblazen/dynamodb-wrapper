@@ -1,6 +1,3 @@
-// core node modules
-var exec = require('child_process').exec;
-
 // npm modules
 var del = require('del');
 var gulp = require('gulp');
@@ -56,13 +53,13 @@ gulp.task('build', function (done) {
 gulp.task('transpile', function () {
     var tsProject = tsc.createProject('tsconfig.json', { typescript: typescript });
 
-    return gulp.src(['lib/**/*.ts', 'test/**/*.ts'])
+    return gulp.src('lib/**/*.ts')
         .pipe(tsc(tsProject))
         .pipe(gulp.dest('bin'));
 });
 
 gulp.task('copy.assets', function () {
-    return gulp.src(['tools/**/*.js'])
+    return gulp.src('tools/**/*.js')
         .pipe(gulp.dest('bin'));
 });
 
@@ -91,7 +88,7 @@ gulp.task('pretest.coverage.instrumentation', function () {
 });
 
 gulp.task('posttest.coverage.reports', function () {
-    return gulp.src(['bin/**/*.spec.js'])
+    return gulp.src('bin/**/*.spec.js')
         .pipe(istanbul.writeReports());
 });
 

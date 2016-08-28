@@ -13,7 +13,10 @@
   },
   "files": [
     "index.js",
-    "bin"
+    "bin/batch-write-heuristic.js",
+    "bin/dynamodb-wrapper.js",
+    "bin/error-types.js",
+    "bin/estimate-item-size.js"
   ],
   "keywords": [
     "aws",
