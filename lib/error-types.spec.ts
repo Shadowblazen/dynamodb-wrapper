@@ -1,20 +1,20 @@
 import {
-    DynamoDBWrapperErrorCode,
-    DynamoDBWrapperErrorMessage,
-    DynamoDBWrapperException
+    ErrorCode,
+    ErrorMessage,
+    Exception
 } from './error-types';
 
 describe('lib/error-types', () => {
 
     it('should define error codes', () => {
-        expect(DynamoDBWrapperErrorCode).toEqual({
+        expect(ErrorCode).toEqual({
             ProvisionedThroughputExceededException: 'ProvisionedThroughputExceededException',
             NotYetImplementedError: 'NotYetImplementedError'
         });
     });
 
     it('should define error messages', () => {
-        expect(DynamoDBWrapperErrorMessage).toEqual({
+        expect(ErrorMessage).toEqual({
             ProvisionedThroughputExceededException: 'The level of configured provisioned throughput for the table was exceeded.' +
             ' Consider increasing your provisioning level with the UpdateTable API',
             BatchWriteMultipleTables: 'Expected exactly 1 table name in RequestItems, but found 0 or 2+.' +
@@ -28,10 +28,10 @@ describe('lib/error-types', () => {
     });
 
     it('should create an exception', () => {
-        let code = DynamoDBWrapperErrorCode.NotYetImplementedError;
-        let message = DynamoDBWrapperErrorMessage.ItemCollectionMetrics;
+        let code = ErrorCode.NotYetImplementedError;
+        let message = ErrorMessage.ItemCollectionMetrics;
 
-        let e = new DynamoDBWrapperException(code, message);
+        let e = new Exception(code, message);
 
         expect(e.code).toBe(code);
         expect(e.message).toBe(message);

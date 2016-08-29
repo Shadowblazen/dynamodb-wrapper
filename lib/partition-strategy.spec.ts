@@ -1,10 +1,7 @@
 import { DynamoDB } from 'aws-sdk';
-import {
-    getNextGroupByItemCount,
-    getNextGroupByTotalWCU
-} from './batch-write-heuristic';
+import { getNextGroupByItemCount, getNextGroupByTotalWCU } from './partition-strategy';
 
-describe('lib/batch-write-heuristic', () => {
+describe('lib/partition-strategy', () => {
 
     const ONE_KB = (() => {
         let str = '';
@@ -22,6 +19,20 @@ describe('lib/batch-write-heuristic', () => {
                     Item: {
                         MyPartitionKey: { N: i.toString() },
                         MyKey: { S: ONE_KB }
+                    }
+                }
+            });
+        }
+        return writeRequests;
+    }
+
+    function _setupDeleteRequests(countRequests: number): DynamoDB.WriteRequests {
+        let writeRequests: any = [];
+        for (let i = 0; i < countRequests; i++) {
+            writeRequests.push({
+                DeleteRequest: {
+                    Key: {
+                        MyPartitionKey: { N: i.toString() }
                     }
                 }
             });
@@ -106,6 +117,23 @@ describe('lib/batch-write-heuristic', () => {
 
             nextGroup = getNextGroupByTotalWCU(writeRequests, 25, options);
             expect(nextGroup).toEqual(writeRequests.slice(25, 30));
+        });
+
+        it('should assume that DeleteRequests always consume 1 WCU', () => {
+            let writeRequests = _setupDeleteRequests(11);
+            let options = {
+                targetGroupWCU: 5
+            };
+            let nextGroup;
+
+            nextGroup = getNextGroupByTotalWCU(writeRequests, 0, options);
+            expect(nextGroup).toEqual(writeRequests.slice(0, 5));
+
+            nextGroup = getNextGroupByTotalWCU(writeRequests, 5, options);
+            expect(nextGroup).toEqual(writeRequests.slice(5, 10));
+
+            nextGroup = getNextGroupByTotalWCU(writeRequests, 10, options);
+            expect(nextGroup).toEqual(writeRequests.slice(10, 11));
         });
 
         it('should return null when the startIndex is out of range', () => {

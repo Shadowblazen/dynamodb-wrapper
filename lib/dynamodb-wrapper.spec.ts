@@ -212,7 +212,7 @@ describe('lib/dynamodb-wrapper', () => {
         return {
             dynamoDB: mockDynamoDB,
             dynamoDBWrapper: new DynamoDBWrapper(mockDynamoDB, {
-                batchWaitMs: 0,
+                groupDelayMs: 0,
                 maxRetries: 2,
                 retryDelayOptions: {
                     base: 0
@@ -226,7 +226,7 @@ describe('lib/dynamodb-wrapper', () => {
         let dynamoDBWrapper = new DynamoDBWrapper(dynamoDB);
 
         expect(dynamoDBWrapper.tableNamePrefix).toBe('');
-        expect(dynamoDBWrapper.batchWaitMs).toBe(100);
+        expect(dynamoDBWrapper.groupDelayMs).toBe(100);
         expect(dynamoDBWrapper.maxRetries).toBe(10);
         expect(dynamoDBWrapper.retryDelayOptions).toEqual({
             base: 100
@@ -237,7 +237,7 @@ describe('lib/dynamodb-wrapper', () => {
         let dynamoDB = new MockDynamoDB();
         let dynamoDBWrapper = new DynamoDBWrapper(dynamoDB, {
             tableNamePrefix: 'local',
-            batchWaitMs: 5,
+            groupDelayMs: 5,
             maxRetries: 3,
             retryDelayOptions: {
                 base: 42,
@@ -246,7 +246,7 @@ describe('lib/dynamodb-wrapper', () => {
         });
 
         expect(dynamoDBWrapper.tableNamePrefix).toBe('local');
-        expect(dynamoDBWrapper.batchWaitMs).toBe(5);
+        expect(dynamoDBWrapper.groupDelayMs).toBe(5);
         expect(dynamoDBWrapper.maxRetries).toBe(3);
         expect(dynamoDBWrapper.retryDelayOptions.base).toBe(42);
         expect(dynamoDBWrapper.retryDelayOptions.customBackoff).toBeDefined();
@@ -256,7 +256,7 @@ describe('lib/dynamodb-wrapper', () => {
         let dynamoDB = new MockDynamoDB();
         let dynamoDBWrapper = new DynamoDBWrapper(dynamoDB, {
             tableNamePrefix: 'local',
-            batchWaitMs: 5,
+            groupDelayMs: 5,
             maxRetries: 3,
             retryDelayOptions: {
                 base: 42,
@@ -265,7 +265,7 @@ describe('lib/dynamodb-wrapper', () => {
         });
 
         expect(dynamoDBWrapper.tableNamePrefix).toBe('local');
-        expect(dynamoDBWrapper.batchWaitMs).toBe(5);
+        expect(dynamoDBWrapper.groupDelayMs).toBe(5);
         expect(dynamoDBWrapper.maxRetries).toBe(3);
         expect(dynamoDBWrapper.retryDelayOptions.base).toBe(42);
         expect(dynamoDBWrapper.retryDelayOptions.customBackoff).toBeDefined();
@@ -664,35 +664,6 @@ describe('lib/dynamodb-wrapper', () => {
                 expect(exception.code).toBe('NotYetImplementedError');
                 expect(exception.message).toBe('Expected exactly 1 table name in RequestItems, but found 0 or 2+. ' +
                     'Writing to more than 1 table with BatchWriteItem is supported in the AWS DynamoDB API, ' +
-                    'but this capability is not yet implemented by this wrapper library.');
-            }
-
-            return test();
-        }));
-
-        it('should throw a NotYetImplemented exception for DeleteRequests', testAsync(() => {
-            async function test() {
-                let mock = _setupDynamoDBWrapper();
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
-                let params: any = {
-                    RequestItems: {
-                        Table1: [
-                            {
-                                DeleteRequest: {}
-                            }
-                        ]
-                    }
-                };
-
-                let exception;
-                try {
-                    await dynamoDBWrapper.batchWriteItem(params);
-                } catch (e) {
-                    exception = e;
-                }
-
-                expect(exception.code).toBe('NotYetImplementedError');
-                expect(exception.message).toBe('DeleteRequest in BatchWriteItem is supported in the AWS DynamoDB API, ' +
                     'but this capability is not yet implemented by this wrapper library.');
             }
 

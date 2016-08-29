@@ -1,9 +1,9 @@
-export const DynamoDBWrapperErrorCode = {
+export const ErrorCode = {
     ProvisionedThroughputExceededException: 'ProvisionedThroughputExceededException',
     NotYetImplementedError: 'NotYetImplementedError'
 };
 
-export const DynamoDBWrapperErrorMessage = {
+export const ErrorMessage = {
     ProvisionedThroughputExceededException: 'The level of configured provisioned throughput for the table was exceeded.' +
         ' Consider increasing your provisioning level with the UpdateTable API',
     BatchWriteMultipleTables: 'Expected exactly 1 table name in RequestItems, but found 0 or 2+.' +
@@ -15,7 +15,7 @@ export const DynamoDBWrapperErrorMessage = {
         ' but this capability is not yet implemented by this wrapper library.'
 };
 
-export class DynamoDBWrapperException {
+export class Exception {
     public code: string;
     public message: string;
     public statusCode: number;

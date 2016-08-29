@@ -19,9 +19,9 @@ declare module "dynamodb-wrapper" {
 
         export interface IDynamoDBWrapperOptions {
 
-            // The DynamoDBWrapper methods query(), scan(), and batchWriteItem() make multiple requests when necessary;
+            // The DynamoDBWrapper methods query(), scan(), and batchWriteItem() make multiple requests when necessary.
             // This setting is the delay (in millseconds) between individual requests made by these operations.
-            batchWaitMs?: number;
+            groupDelayMs?: number;
 
             // The maximum amount of retries to attempt with a request.
             // @see http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/DynamoDB.html#constructor-property
@@ -43,6 +43,15 @@ declare module "dynamodb-wrapper" {
             partitionStrategy?: 'EqualItemCount' | 'EvenlyDistributedGroupWCU';
             targetItemCount?: number;
             targetGroupWCU?: number;
+            groupDelayMs?: number;
+        }
+
+        export interface IQueryOptions {
+            groupDelayMs?: number;
+        }
+
+        export interface IScanOptions {
+            groupDelayMs?: number;
         }
 
         // ------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 declare interface IDynamoDBWrapperOptions {
     tableNamePrefix?: string;
-    batchWaitMs?: number;
+    groupDelayMs?: number;
     maxRetries?: number;
     retryDelayOptions?: {
         base?: number;
@@ -12,6 +12,15 @@ declare interface IBatchWriteItemOptions {
     partitionStrategy?: 'EqualItemCount' | 'EvenlyDistributedGroupWCU';
     targetItemCount?: number;
     targetGroupWCU?: number;
+    groupDelayMs?: number;
+}
+
+declare interface IQueryOptions {
+    groupDelayMs?: number;
+}
+
+declare interface IScanOptions {
+    groupDelayMs?: number;
 }
 
 declare type TDictionary<T> = { [key: string] : T; };

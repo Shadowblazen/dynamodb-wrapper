@@ -14,10 +14,11 @@
   "files": [
     "index.js",
     "index.d.ts",
-    "bin/batch-write-heuristic.js",
     "bin/dynamodb-wrapper.js",
     "bin/error-types.js",
-    "bin/estimate-item-size.js"
+    "bin/estimate-item-size.js",
+    "bin/partition-strategy.js",
+    "bin/table-prefixes.js"
   ],
   "keywords": [
     "aws",

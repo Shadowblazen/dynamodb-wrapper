@@ -1,7 +1,8 @@
 ## What is dynamodb-wrapper?
 
 - **Enhanced AWS SDK:** A lightweight wrapper that extends the AWS JavaScript SDK for DynamoDB
-- **Bulk read/write:** Easily transmit large amounts of data from/to DynamoDB
+- **Bulk I/O:** Easily read, write or delete entire collections of items in DynamoDB with a single API call.
+- **Table Prefixes:** If you have multiple environments in the same AWS Account (e.g. "dev-MyTable" and "stage-MyTable"), give DynamoDBWrapper a table prefix and it will automatically prepend it to all requests and remove it from all responses - so that you don't have to think about prefixes in your application.
 
 ## Installing
 
@@ -24,8 +25,8 @@ var dynamoDB = new AWS.DynamoDB();
 // construct the DynamoDBWrapper object
 var dynamoDBWrapper = new DynamoDBWrapper(dynamoDB, {
     // see the Configuration section of the README for more info
-    batchWaitMs: 200,
-    maxRetries: 6
+    groupDelayMs: 200,
+    maxRetries: 6,
     retryDelayOptions: {
         base: 100
     }
@@ -34,7 +35,7 @@ var dynamoDBWrapper = new DynamoDBWrapper(dynamoDB, {
 
 ### Example: Bulk Read
 
-*Export large sets of data from DynamoDB tables.*
+Read large collections of data from a DynamoDB table with a single API call. Multiple pages of data are aggregated and returned in a single response.
 
 @see http://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_Query.html
 
@@ -50,16 +51,9 @@ var sampleQueryParams = {
     }
 };
 
-// The AWS SDK's query() and scan() methods only return 1 page of data at a time.
-// If you want all pages aggregated you have to use LastEvaluatedKey and make
-// multiple requests, which comes with the complexity of handling a series of
-// asychronous calls, errors from individual requests, and aggregation of
-// all pages of data when all the responses come back successfully.
-
-// DynamoDBWrapper.query() or DynamoDBWrapper.scan() will handle that for you.
-// When the promise resolves/rejects, you'll get a single response containing
-// all pages of data. If an error occurs with an individual request,
-// the promise rejects immediately.
+// fetches all pages of data from DynamoDB
+// promise resolves with the aggregation of all pages,
+// or rejects immediately if an error occurrs
 
 dynamoDBWrapper.query(sampleQueryParams)
     .then(function (response) {
@@ -70,14 +64,14 @@ dynamoDBWrapper.query(sampleQueryParams)
     });
 ```
 
-### Example: Bulk Write
+### Example: Bulk Write/Delete
 
-*Insert large collections of items into DynamoDB tables with minimal effort.*
+Insert or delete large collections of items in a DynamoDB table with a single API call. DynamoDBWrapper automatically batches your requests and aggregates the results into a single response.
 
 @see http://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchWriteItem.html
 
 ```js
-// params for BatchWriteItem - same format as in the AWS SDK, but the array can be larger than 25 items
+// params for BatchWriteItem - same format as in the AWS SDK
 var sampleParams = {
     RequestItems: {
         MyTable: [
@@ -88,39 +82,26 @@ var sampleParams = {
                     }
                 }
             },
+            {
+                DeleteRequest: {
+                    Key: {
+                        MyPartitionKey: { N: '2' }
+                    }
+                }
+            },
             // this array can have thousands of items ...
         ]
     }
 };
 
-// The AWS SDK's batchWriteItem() method has a limit of 25 items - if you want to
-// write more than that you have to partition your items into groups and make
-// multiple requests, which comes with the complexity of handling a series of
-// asynchronous calls and errors coming from individual requests.
-
-// If your items are of unknown and/or variable size (in WCU) and you take
-// the naive approach of writing 25 items per request, you will have throughput
-// spikes as your requests consume throughput unpredictably or unevenly.
-// This may cause undesirable side-effects such as request failure due to throttling,
-// the consumption of reserve capacity, and/or CloudWatch alarms to be triggered.
-
-// DynamoDBWrapper.batchWriteItem() strives to improve this behavior.
-// In the following example, the size (in WCU) of each item will be estimated.
-// This estimate will be used to partition the array into variable-length
-// groups whose items sum to approximately 50 total WCU. Then, these groups
-// will be written sequentially at a rate of 1 request per 1000 ms.
-
-// In other words, if you have a table with 50 WriteCapacityUnits of
-// available throughput, this configuration would evenly distribute items to
-// make predictable, optimal use of available throughput with minimal spikes.
-
-var dynamoDBWrapper = new DynamoDBWrapper(dynamoDB, {
-    batchWaitMs: 1000
-});
+// performs all Puts/Deletes in the array
+// promise resolves when all items are written successfully,
+// or rejects immediately if an error occurs
 
 dynamoDBWrapper.batchWriteItem(sampleParams, {
     partitionStrategy: 'EvenlyDistributedGroupWCU',
-    targetGroupWCU: 50
+    targetGroupWCU: 50,
+    groupDelayMs: 1000
 })
     .then(function (response) {
         console.log(response);
@@ -135,7 +116,7 @@ dynamoDBWrapper.batchWriteItem(sampleParams, {
 *This section is copied from the `IDynamoDBWrapperOptions` interface in the `index.d.ts` file.*
 
 The `DynamoDBWrapper` constructor accepts an optional configuration object with the following properties:
-- `batchWaitMs` (number) - `query()`, `scan()`, and `batchWriteItem()` make multiple requests when necessary; This setting is the delay (in millseconds) between individual requests made by these operations.
+- `groupDelayMs` (number) - `query()`, `scan()`, and `batchWriteItem()` make multiple requests when necessary. This setting is the delay (in millseconds) between individual requests made by these operations.
 - `maxRetries` (number) - The maximum amount of retries to attempt with a request. Note: this property is identical to the one described in [the AWS documentation](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/DynamoDB.html#constructor-property).
 - `retryDelayOptions` (object) - A set of options to configure the retry delay on retryable errors. Note: this property is identical to the one described in [the AWS documentation](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/DynamoDB.html#constructor-property). Currently supported options are:
     - `base` (number) - The base number of milliseconds to use in the exponential backoff for operation retries. Defaults to 100 ms.
@@ -143,9 +124,7 @@ The `DynamoDBWrapper` constructor accepts an optional configuration object with 
 
 ## Roadmap
 
-- **Bulk Delete:** Support `DeleteRequest` in `batchWriteItem()` for bulk delete operations.
+- **BatchGetItem:** Add support for `BatchGetItem` as part of the "Bulk Read" feature set.
 - **Event Hooks:** Use an EventEmitter to hook into events for logging and visibility
     - "retry" - get notified when a request is throttled and retried, so that you can log it or increase table throughput
-- **Table Prefixes:** Configuration-driven table prefixes for users or companies that want to have multiple copies of the same table
-    - Example: If you have dev and staging environments in the same AWS Account, DynamoDBWrapper can automatically add the prefix to requests and strip it from responses so that you can interact with "dev-MyTable" and "stg-MyTable" without writing extra code in your application
 - **Streams:** Add method signatures that return Streams (instead of Promises), allowing for better integration ecosystems such as gulp
