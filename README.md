@@ -1,6 +1,6 @@
 ## What is dynamodb-wrapper?
 
-- **Enhanced AWS SDK:** A lightweight wrapper that enhances the functionality of the AWS JavaScript SDK for DynamoDB
+- **Enhanced AWS SDK:** A lightweight wrapper that extends the AWS JavaScript SDK for DynamoDB
 - **Bulk read/write:** Easily transmit large amounts of data from/to DynamoDB
 
 ## Installing
@@ -137,10 +137,9 @@ The `DynamoDBWrapper` constructor accepts an optional configuration object with 
 
 ## Roadmap
 
-*The following ideas/features are :*
-
-- **Events:** Use an EventEmitter to hook into events for logging and visibility
+- **Bulk Delete:** Support `DeleteRequest` in `batchWriteItem()` for bulk delete operations.
+- **Event Hooks:** Use an EventEmitter to hook into events for logging and visibility
     - "retry" - get notified when a request is throttled and retried, so that you can log it or increase table throughput
-- **Table prefixes:** Configuration-drive table prefixes for users or companies that want to have multiple copies of the same table
-    - Example: if you have dev and staging environments in the same AWS Account, easily interact with "dev-MyTable" or "stg-MyTable" without writing extra code in your application
-- **Streams:** A version of this library built on streams, allowing for easier integration other ecosystems such as gulp
+- **Table Prefixes:** Configuration-drive table prefixes for users or companies that want to have multiple copies of the same table
+    - Example: if you have dev and staging environments in the same AWS Account, DynamoDBWrapper can automatically add the prefix to requests and strip it from responses so that you can interact with "dev-MyTable" and "stg-MyTable" without writing extra code in your application
+- **Streams:** Add method signatures that return Streams (instead of Promises), allowing for better integration ecosystems such as gulp
