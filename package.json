@@ -13,6 +13,7 @@
   },
   "files": [
     "index.js",
+    "index.d.ts",
     "bin/batch-write-heuristic.js",
     "bin/dynamodb-wrapper.js",
     "bin/error-types.js",
@@ -36,6 +37,7 @@
     "email": "jbradford3@hotmail.com"
   },
   "license": "MIT",
+  "typings": "index.d.ts",
   "engines": {
     "node": ">=4.5.0"
   },

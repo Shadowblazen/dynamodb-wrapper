@@ -173,7 +173,7 @@ export class DynamoDBWrapper {
      */
 
     public async batchWriteItem(params: DynamoDB.BatchWriteItemInput,
-                                options?: IBatchWriteOptions): Promise<DynamoDB.BatchWriteItemOutput> {
+                                options?: IBatchWriteItemOptions): Promise<DynamoDB.BatchWriteItemOutput> {
         // validate parameters to check for features not yet implemented
         _validateBatchWriteItemParams(params);
 
@@ -208,7 +208,7 @@ export class DynamoDBWrapper {
     }
 
     private async _batchWriteItemHelper(tableName: string, params: DynamoDB.BatchWriteItemInput,
-                                        options: IBatchWriteOptions): Promise<DynamoDB.BatchWriteItemOutput[]> {
+                                        options: IBatchWriteItemOptions): Promise<DynamoDB.BatchWriteItemOutput[]> {
 
         let list = [];
 

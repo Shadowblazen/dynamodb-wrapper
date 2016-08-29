@@ -4,7 +4,7 @@ import { estimateWriteCapacityUnits } from './estimate-item-size';
 const BATCH_WRITE_MAX_ITEM_COUNT = 25;
 
 export function getNextGroupByItemCount(writeRequests: DynamoDB.WriteRequests, startIndex: number,
-                                        options: IBatchWriteOptions): DynamoDB.WriteRequests {
+                                        options: IBatchWriteItemOptions): DynamoDB.WriteRequests {
 
     if (startIndex < 0 || startIndex >= writeRequests.length) {
         return null;
@@ -16,7 +16,7 @@ export function getNextGroupByItemCount(writeRequests: DynamoDB.WriteRequests, s
 }
 
 export function getNextGroupByItemSize(writeRequests: DynamoDB.WriteRequests, startIndex: number,
-                                       options: IBatchWriteOptions): DynamoDB.WriteRequests {
+                                       options: IBatchWriteItemOptions): DynamoDB.WriteRequests {
 
     if (startIndex < 0 || startIndex >= writeRequests.length) {
         return null;
