@@ -50,14 +50,16 @@ var sampleQueryParams = {
     }
 };
 
-// The AWS SDK's query() and scan() methods only return 1 page of data at a time - if you want all pages
-// aggregated you have to use LastEvaluatedKey and make multiple requests, which comes with the complexity
-// of handling a series of asychronous calls, errors from individual requests, and aggregation
-// of all pages of data when all the responses come back successfully.
+// The AWS SDK's query() and scan() methods only return 1 page of data at a time.
+// If you want all pages aggregated you have to use LastEvaluatedKey and make
+// multiple requests, which comes with the complexity of handling a series of
+// asychronous calls, errors from individual requests, and aggregation of
+// all pages of data when all the responses come back successfully.
 
-// DynamoDBWrapper.query() or DynamoDBWrapper.scan() will handle all of that for you.
-// When the promise resolves/rejects, you'll get a single response with all pages of data.
-// If an error occurs with an individual request, the promise rejects immediately.
+// DynamoDBWrapper.query() or DynamoDBWrapper.scan() will handle that for you.
+// When the promise resolves/rejects, you'll get a single response containing
+// all pages of data. If an error occurs with an individual request,
+// the promise rejects immediately.
 
 dynamoDBWrapper.query(sampleQueryParams)
     .then(function (response) {
@@ -91,22 +93,26 @@ var sampleParams = {
     }
 };
 
-// The AWS SDK's batchWriteItem() method has a limit of 25 items - if you want to write more than that
-// you have to partition your items into groups and make multiple requests, which comes with
-// the complexity of handling a series of asynchronous calls and errors coming from individual requests.
+// The AWS SDK's batchWriteItem() method has a limit of 25 items - if you want to
+// write more than that you have to partition your items into groups and make
+// multiple requests, which comes with the complexity of handling a series of
+// asynchronous calls and errors coming from individual requests.
 
-// Not only that, but if your items are of unknown and/or variable size (in WCU) and you take the naive approach of
-// writing 25 items per request, you will have throughput spikes as your requests consume throughput
-// unpredictably or unevenly. This may cause undesirable side-effects such as request failure due to throttling,
+// If your items are of unknown and/or variable size (in WCU) and you take
+// the naive approach of writing 25 items per request, you will have throughput
+// spikes as your requests consume throughput unpredictably or unevenly.
+// This may cause undesirable side-effects such as request failure due to throttling,
 // the consumption of reserve capacity, and/or CloudWatch alarms to be triggered.
 
-// DynamoDBWrapper.batchWriteItem() strives to improve this behavior. In the following example,
-// the size (in WCU) of each item will be estimated. This estimate will be used to partition the array
-// into variable-length groups whose items sum to approximately 50 total WCU. Then, these groups will be written
-// sequentially at a rate of 1 request per 1000 ms.
+// DynamoDBWrapper.batchWriteItem() strives to improve this behavior.
+// In the following example, the size (in WCU) of each item will be estimated.
+// This estimate will be used to partition the array into variable-length
+// groups whose items sum to approximately 50 total WCU. Then, these groups
+// will be written sequentially at a rate of 1 request per 1000 ms.
 
-// In other words, if you have a table with 50 WriteCapacityUnits of available throughput, this configuration would
-// evenly distribute items to make predictable, optimal use of available throughput with minimal spikes.
+// In other words, if you have a table with 50 WriteCapacityUnits of
+// available throughput, this configuration would evenly distribute items to
+// make predictable, optimal use of available throughput with minimal spikes.
 
 var dynamoDBWrapper = new DynamoDBWrapper(dynamoDB, {
     batchWaitMs: 1000
@@ -140,6 +146,6 @@ The `DynamoDBWrapper` constructor accepts an optional configuration object with 
 - **Bulk Delete:** Support `DeleteRequest` in `batchWriteItem()` for bulk delete operations.
 - **Event Hooks:** Use an EventEmitter to hook into events for logging and visibility
     - "retry" - get notified when a request is throttled and retried, so that you can log it or increase table throughput
-- **Table Prefixes:** Configuration-drive table prefixes for users or companies that want to have multiple copies of the same table
-    - Example: if you have dev and staging environments in the same AWS Account, DynamoDBWrapper can automatically add the prefix to requests and strip it from responses so that you can interact with "dev-MyTable" and "stg-MyTable" without writing extra code in your application
+- **Table Prefixes:** Configuration-driven table prefixes for users or companies that want to have multiple copies of the same table
+    - Example: If you have dev and staging environments in the same AWS Account, DynamoDBWrapper can automatically add the prefix to requests and strip it from responses so that you can interact with "dev-MyTable" and "stg-MyTable" without writing extra code in your application
 - **Streams:** Add method signatures that return Streams (instead of Promises), allowing for better integration ecosystems such as gulp
