@@ -1,7 +1,7 @@
 import { DynamoDB } from 'aws-sdk';
 import {
     getNextGroupByItemCount,
-    getNextGroupByItemSize
+    getNextGroupByTotalWCU
 } from './batch-write-heuristic';
 
 describe('lib/batch-write-heuristic', () => {
@@ -31,7 +31,7 @@ describe('lib/batch-write-heuristic', () => {
 
     describe('getNextGroupByItemCount()', () => {
 
-        it('should evenly partition the requests array', () => {
+        it('should partition the requests array into groups of equal length', () => {
             let writeRequests = _setupWriteRequests(10);
             let options = {
                 targetItemCount: 4
@@ -78,47 +78,47 @@ describe('lib/batch-write-heuristic', () => {
 
     });
 
-    describe('getNextGroupByItemSize()', () => {
+    describe('getNextGroupByTotalWCU()', () => {
 
-        it('should evenly partition the requests array', () => {
+        it('should partition the requests array into groups of approximately equal total WCU', () => {
             let writeRequests = _setupWriteRequests(10);
             let options = {
-                targetItemSize: 5
+                targetGroupWCU: 5
             };
             let nextGroup;
 
-            nextGroup = getNextGroupByItemSize(writeRequests, 0, options);
+            nextGroup = getNextGroupByTotalWCU(writeRequests, 0, options);
             expect(nextGroup).toEqual(writeRequests.slice(0, 5));
 
-            nextGroup = getNextGroupByItemSize(writeRequests, 5, options);
+            nextGroup = getNextGroupByTotalWCU(writeRequests, 5, options);
             expect(nextGroup).toEqual(writeRequests.slice(5, 10));
         });
 
         it('should not exceed the BatchWriteItem max item count for an individual group', () => {
             let writeRequests = _setupWriteRequests(30);
             let options = {
-                targetItemSize: 9999
+                targetGroupWCU: 9999
             };
             let nextGroup;
 
-            nextGroup = getNextGroupByItemSize(writeRequests, 0, options);
+            nextGroup = getNextGroupByTotalWCU(writeRequests, 0, options);
             expect(nextGroup).toEqual(writeRequests.slice(0, 25));
 
-            nextGroup = getNextGroupByItemSize(writeRequests, 25, options);
+            nextGroup = getNextGroupByTotalWCU(writeRequests, 25, options);
             expect(nextGroup).toEqual(writeRequests.slice(25, 30));
         });
 
         it('should return null when the startIndex is out of range', () => {
             let writeRequests = _setupWriteRequests(10);
             let options = {
-                targetItemSize: 5
+                targetGroupWCU: 5
             };
             let nextGroup;
 
-            nextGroup = getNextGroupByItemSize(writeRequests, 10, options);
+            nextGroup = getNextGroupByTotalWCU(writeRequests, 10, options);
             expect(nextGroup).toBe(null);
 
-            nextGroup = getNextGroupByItemSize(writeRequests, -1, options);
+            nextGroup = getNextGroupByTotalWCU(writeRequests, -1, options);
             expect(nextGroup).toBe(null);
         });
 

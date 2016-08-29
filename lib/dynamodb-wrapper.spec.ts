@@ -710,7 +710,7 @@ describe('lib/dynamodb-wrapper', () => {
 
                 await dynamoDBWrapper.batchWriteItem(params);
 
-                expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(2);
+                expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(1);
 
             }
 
@@ -727,29 +727,8 @@ describe('lib/dynamodb-wrapper', () => {
                 spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
 
                 await dynamoDBWrapper.batchWriteItem(params, {
-                    heuristic: 'ItemCount',
-                    targetItemCount: 4
-                });
-
-                expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(3);
-
-            }
-
-            return test();
-        }));
-
-        it('should batch write items with custom options', testAsync(() => {
-            async function test() {
-                let params = _setupBatchWriteItemParams();
-                let mock = _setupDynamoDBWrapper();
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
-
-                spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
-
-                await dynamoDBWrapper.batchWriteItem(params, {
-                    heuristic: 'ItemCount',
-                    targetItemCount: 4
+                    partitionStrategy: 'EvenlyDistributedGroupWCU',
+                    targetGroupWCU: 4
                 });
 
                 expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(3);
@@ -769,7 +748,7 @@ describe('lib/dynamodb-wrapper', () => {
                 spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
 
                 await dynamoDBWrapper.batchWriteItem(params, {
-                    heuristic: 'ItemCount',
+                    partitionStrategy: 'EqualItemCount',
                     targetItemCount: 10
                 });
 
@@ -790,7 +769,7 @@ describe('lib/dynamodb-wrapper', () => {
                 let exception;
                 try {
                     await dynamoDBWrapper.batchWriteItem(params, {
-                        heuristic: 'ItemCount',
+                        partitionStrategy: 'EqualItemCount',
                         targetItemCount: 10
                     });
                 } catch (e) {
@@ -815,7 +794,7 @@ describe('lib/dynamodb-wrapper', () => {
                 spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
 
                 let response = await dynamoDBWrapper.batchWriteItem(params, {
-                    heuristic: 'ItemCount',
+                    partitionStrategy: 'EqualItemCount',
                     targetItemCount: 4
                 });
 
@@ -842,7 +821,7 @@ describe('lib/dynamodb-wrapper', () => {
                 spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
 
                 let response = await dynamoDBWrapper.batchWriteItem(params, {
-                    heuristic: 'ItemCount',
+                    partitionStrategy: 'EqualItemCount',
                     targetItemCount: 4
                 });
 

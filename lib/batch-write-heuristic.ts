@@ -15,7 +15,7 @@ export function getNextGroupByItemCount(writeRequests: DynamoDB.WriteRequests, s
     }
 }
 
-export function getNextGroupByItemSize(writeRequests: DynamoDB.WriteRequests, startIndex: number,
+export function getNextGroupByTotalWCU(writeRequests: DynamoDB.WriteRequests, startIndex: number,
                                        options: IBatchWriteItemOptions): DynamoDB.WriteRequests {
 
     if (startIndex < 0 || startIndex >= writeRequests.length) {
@@ -29,7 +29,7 @@ export function getNextGroupByItemSize(writeRequests: DynamoDB.WriteRequests, st
         while (i < writeRequests.length && i - startIndex < BATCH_WRITE_MAX_ITEM_COUNT) {
             estimatedWCU = estimateWriteCapacityUnits(writeRequests[i].PutRequest.Item);
 
-            if (totalEstimatedWCU + estimatedWCU <= options.targetItemSize) {
+            if (totalEstimatedWCU + estimatedWCU <= options.targetGroupWCU) {
                 totalEstimatedWCU += estimatedWCU;
                 i++;
             } else {

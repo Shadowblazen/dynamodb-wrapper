@@ -8,7 +8,7 @@ import {
     DynamoDBWrapperErrorCode,
     DynamoDBWrapperErrorMessage
 } from './error-types';
-import { getNextGroupByItemCount, getNextGroupByItemSize } from './batch-write-heuristic';
+import { getNextGroupByItemCount, getNextGroupByTotalWCU } from './batch-write-heuristic';
 
 export class DynamoDBWrapper {
     public dynamoDB: any;
@@ -121,22 +121,24 @@ export class DynamoDBWrapper {
      *
      * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
      *
-     * The ItemCount heuristic is used to partition the array into groups of equal item counts.
+     * The EqualItemCount partition strategy is the "simple" approach to partitioning, which works well
+     * when all your items have predicable, equal size in WCU.
      *
-     * For example, if options.heuristic='ItemCount' and options.targetItemCount=10, an array of 32 items would be
+     * For example, with partitionStrategy="EqualItemCount" and targetItemCount=10, an array of 32 items would be
      * partitioned into 4 groups as [10], [10], [10], [2]. The first 3 groups would have 10 items each, and the
      * remaining 2 items would be in the last group. The underlying DynamoDB BatchWriteItem method would be called
      * a total of 4 times - once for each group in the partition.
      *
      * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
      *
-     * The ItemSize heuristic is used to partition the array into groups whose items sum to equal WriteCapacityUnits
+     * The EvenlyDistributedGroupWCU partition strategy is used to partition the array into groups of equal total WCU
      * up to a given threshold. This allows you make optimal use of available table throughput.
      *
      * For example, if a table has a throughput of 25 WCU, and we're writing 1 group per second, ideally every group
-     * would be sized such that it consumes exactly 25 WCU when written to the table. This is pretty easy to do
-     * if all your items are the same size and you know what that size is, but oftentimes you have variable/unknown
-     * item sizes. This strategy is designed for this scenario.
+     * would be sized such that it consumes exactly 25 WCU when written to the table. The "simple" approach
+     * used in the EqualItemCount partition strategy suffices when your item sizes are consistent and predicable,
+     * but some data (particularly user-generated content) can be of highly variable or unknown sizes (in WCU).
+     * This partition strategy is designed for that scenario.
      *
      * For example, suppose we wish to write an array of items [A, B, C, D, E, F], where the sizes of the items
      * (in WriteCapacityUnits) are:
@@ -148,22 +150,23 @@ export class DynamoDBWrapper {
      *     E = 2 WCU
      *     F = 1 WCU
      *
-     * With options.heuristic='ItemSize' and options.targetItemSize=3 WCU, this array would be partitioned as:
+     * With partitionStrategy="EvenlyDistributedGroupWCU" and targetGroupWCU=3, this array would be partitioned as:
      *
      *     [A]       = total of 4 WCU
      *     [B, C, D] = total of 3 WCU
      *     [E, F]    = total of 3 WCU
      *
-     * With options.heuristic='ItemSize' and options.targetItemSize=5, this same array would instead be partitioned as:
+     * With partitionStrategy="EvenlyDistributedGroupWCU" and targetGroupWCU=5, the partitioning would be:
      *
      *     [A, B]       = total of 5 WCU
      *     [C, D, E, F] = total of 5 WCU
      *
-     * More generally speaking, this heuristic employs the following algorithm while iterating through the array:
-     * 1) Create a new group in the partition
+     * More generally speaking, this partition strategy employs the following algorithm:
+     * for each item in the array...
+     * 1) Create a new group
      * 2) Add the current item to the group (to ensure each group always contains at least 1 item)
-     * 3) While the sum of item WCUs in the group + next item WCU <= targetItemSize, add next item to the group
-     * 4) When the sum of item WCUs in the group > targetItemSize, go back to step 1)
+     * 3) While the sum of item WCUs in the group + next item WCU <= targetGroupWCU, add next item to the group
+     * 4) If the sum of item WCUs in the group + next item WCU > targetGroupWCU, go back to step 1
      *
      * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
      *
@@ -182,7 +185,7 @@ export class DynamoDBWrapper {
 
         // set default options
         options = options || {};
-        options.targetItemSize = _getPositiveInteger(options.targetItemSize, 5);
+        options.targetGroupWCU = _getPositiveInteger(options.targetGroupWCU, 5);
         options.targetItemCount = _getPositiveInteger(options.targetItemCount, 25);
 
         let responses = await this._batchWriteItemHelper(tableName, params, options);
@@ -213,7 +216,9 @@ export class DynamoDBWrapper {
         let list = [];
 
         const writeRequests = params.RequestItems[tableName];
-        const getNextGroup = options.heuristic === 'ItemCount' ? getNextGroupByItemCount : getNextGroupByItemSize;
+        const getNextGroup = options.partitionStrategy === 'EvenlyDistributedGroupWCU'
+            ? getNextGroupByTotalWCU
+            : getNextGroupByItemCount;
 
         // construct params for the next group of items
         let groupParams: any = {

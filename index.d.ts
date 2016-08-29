@@ -40,9 +40,9 @@ declare module "dynamodb-wrapper" {
         }
 
         export interface IBatchWriteItemOptions {
-            heuristic?: 'ItemCount' | 'ItemSize';
+            partitionStrategy?: 'EqualItemCount' | 'EvenlyDistributedGroupWCU';
             targetItemCount?: number;
-            targetItemSize?: number;
+            targetGroupWCU?: number;
         }
 
         // ------------------------------------------------------------------------

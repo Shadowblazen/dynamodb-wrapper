@@ -9,9 +9,9 @@ declare interface IDynamoDBWrapperOptions {
 }
 
 declare interface IBatchWriteItemOptions {
-    heuristic?: 'ItemCount' | 'ItemSize';
+    partitionStrategy?: 'EqualItemCount' | 'EvenlyDistributedGroupWCU';
     targetItemCount?: number;
-    targetItemSize?: number;
+    targetGroupWCU?: number;
 }
 
 declare type TDictionary<T> = { [key: string] : T; };
