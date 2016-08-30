@@ -1,8 +1,8 @@
 ## What is dynamodb-wrapper?
 
-- **Enhanced AWS SDK:** A lightweight wrapper that extends the AWS JavaScript SDK for DynamoDB
+- **Enhanced AWS SDK:** Public interface closely resembles the AWS SDK, making it easier to learn and use.
 - **Bulk I/O:** Easily read, write or delete entire collections of items in DynamoDB with a single API call.
-- **Table Prefixes:** If you have multiple environments in the same AWS Account (e.g. "dev-MyTable" and "stage-MyTable"), give DynamoDBWrapper a table prefix and it will automatically prepend it to all requests and remove it from all responses - so that you don't have to think about prefixes in your application.
+- **Table prefixes:** If you have multiple environments in the same AWS Account (e.g. "dev-MyTable" and "stage-MyTable"), give DynamoDBWrapper a table prefix and it will automatically prepend it to all requests and remove it from all responses - so that you don't have to think about prefixes in your application.
 
 ## Installing
 
@@ -116,15 +116,38 @@ dynamoDBWrapper.batchWriteItem(sampleParams, {
 *This section is copied from the `IDynamoDBWrapperOptions` interface in the `index.d.ts` file.*
 
 The `DynamoDBWrapper` constructor accepts an optional configuration object with the following properties:
-- `groupDelayMs` (number) - `query()`, `scan()`, and `batchWriteItem()` make multiple requests when necessary. This setting is the delay (in millseconds) between individual requests made by these operations.
+- `tableNamePrefix` (string) - A prefix to add to all requests and remove from all responses.
+- `groupDelayMs` (number) - The delay (in millseconds) between individual requests made `query()`, `scan()`, and `batchWriteItem()`. Defaults to 100 ms.
 - `maxRetries` (number) - The maximum amount of retries to attempt with a request. Note: this property is identical to the one described in [the AWS documentation](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/DynamoDB.html#constructor-property).
 - `retryDelayOptions` (object) - A set of options to configure the retry delay on retryable errors. Note: this property is identical to the one described in [the AWS documentation](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/DynamoDB.html#constructor-property). Currently supported options are:
     - `base` (number) - The base number of milliseconds to use in the exponential backoff for operation retries. Defaults to 100 ms.
     - `customBackoff` (Function) - A custom function that accepts a retry count and returns the amount of time to delay in milliseconds. The `base` option will be ignored if this option is supplied.
 
+## API
+
+The `DynamoDBWrapper` class supports the following methods, which are wrappers around the AWS SDK method of the same name. Please refer to the AWS [API documentation](http://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_Operations.html) and [JavaScript SDK documentation](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/DynamoDB.html) for more details:
+
+- `getItem(params)` - Gets a single item from DynamoDB, same as `GetItem` in the AWS SDK.
+- `updateItem(params)` - Updates a single item in DynamoDB, same as `UpdateItem` in the AWS SDK.
+- `putItem(params)` - Puts a single item into DynamoDB, same as `PutItem` in the AWS SDK.
+- `deleteItem(params)` - Deletes a single item from DynammoDB, same as `DeleteItem` in the AWS SDK.
+- `query(params, options)` - Fetches all pages of data from a DynamoDB query, making multiple requests and aggregating responses when necessary. Input and output formats are identical to `Query` in the AWS SDK.
+    - `options.groupDelayMs` (number) - the delay (in milliseconds) between individual requests. Overrides the configuration property of the same name in the constructor. Defaults to 100 ms.
+- `scan(params, options)` - Fetches all pages of data from a DynamoDB scan. Input and output formats are identical to `Scan` in the AWS SDK.
+    - `options.groupDelayMs` (number) - the delay (in milliseconds) between individual requests. Overrides the configuration property of the same name in the constructor. Defaults to 100 ms.
+- `batchWriteItem(params, options)` - Writes or deletes large collections of items in a single DynamoDB table, batching items and making multiple requests when necessary. Input and output formats are identical to `BatchWriteItem` in the AWS SDK.
+    - `options.groupDelayMs` (number) - the delay (in milliseconds) between individual requests. Overrides the configuration property of the same name in the constructor. Defaults to 100 ms.
+    - `options.partitionStrategy` (string) possible values:
+        - `'EqualItemCount'` - the "simple" strategy which creates groups with equal number of items.
+        - `'EvenlyDistributedGroupWCU'` a "smart" strategy which creates groups with equalized total WCU, allowing for variable item counts.
+    - `options.targetItemCount` (number) - the number of items to put in each group when using the `'EqualItemCount'` partition strategy.
+    - `options.targetGroupWCU` (number) - the total WCU for each group in the `'EvenlyDistributedGroupWCU'` partition strategy.
+
 ## Roadmap
 
 - **BatchGetItem:** Add support for `BatchGetItem` as part of the "Bulk Read" feature set.
 - **Event Hooks:** Use an EventEmitter to hook into events for logging and visibility
-    - "retry" - get notified when a request is throttled and retried, so that you can log it or increase table throughput
+    - "read" - be notified whenever a request consumes read throughput, so that you can log it or adjust configured throughput levels
+    - "write" - be notified whenever a request consumes write throughput, so that you can log it or adjust configured throughput levels
+    - "retry" - be notified when a request is retried due to throttling, so that you can log it or increase configured throughput levels
 - **Streams:** Add method signatures that return Streams (instead of Promises), allowing for better integration ecosystems such as gulp

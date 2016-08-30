@@ -19,6 +19,9 @@ declare module "dynamodb-wrapper" {
 
         export interface IDynamoDBWrapperOptions {
 
+            // A prefix to add to all requests and remove from all responses.
+            tableNamePrefix?: string;
+
             // The DynamoDBWrapper methods query(), scan(), and batchWriteItem() make multiple requests when necessary.
             // This setting is the delay (in millseconds) between individual requests made by these operations.
             groupDelayMs?: number;
