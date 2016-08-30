@@ -127,21 +127,21 @@ The `DynamoDBWrapper` constructor accepts an optional configuration object with 
 
 The `DynamoDBWrapper` class supports the following methods, which are wrappers around the AWS SDK method of the same name. Please refer to the AWS [API documentation](http://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_Operations.html) and [JavaScript SDK documentation](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/DynamoDB.html) for more details:
 
-- `getItem(params)` - Gets a single item from DynamoDB, same as `GetItem` in the AWS SDK.
-- `updateItem(params)` - Updates a single item in DynamoDB, same as `UpdateItem` in the AWS SDK.
-- `putItem(params)` - Puts a single item into DynamoDB, same as `PutItem` in the AWS SDK.
-- `deleteItem(params)` - Deletes a single item from DynammoDB, same as `DeleteItem` in the AWS SDK.
-- `query(params, options)` - Fetches all pages of data from a DynamoDB query, making multiple requests and aggregating responses when necessary. Input and output formats are identical to `Query` in the AWS SDK.
-    - `options.groupDelayMs` (number) - the delay (in milliseconds) between individual requests. Overrides the configuration property of the same name in the constructor. Defaults to 100 ms.
-- `scan(params, options)` - Fetches all pages of data from a DynamoDB scan. Input and output formats are identical to `Scan` in the AWS SDK.
-    - `options.groupDelayMs` (number) - the delay (in milliseconds) between individual requests. Overrides the configuration property of the same name in the constructor. Defaults to 100 ms.
-- `batchWriteItem(params, options)` - Writes or deletes large collections of items in a single DynamoDB table, batching items and making multiple requests when necessary. Input and output formats are identical to `BatchWriteItem` in the AWS SDK.
-    - `options.groupDelayMs` (number) - the delay (in milliseconds) between individual requests. Overrides the configuration property of the same name in the constructor. Defaults to 100 ms.
-    - `options.partitionStrategy` (string) possible values:
-        - `'EqualItemCount'` - the "simple" strategy which creates groups with equal number of items.
-        - `'EvenlyDistributedGroupWCU'` a "smart" strategy which creates groups with equalized total WCU, allowing for variable item counts.
-    - `options.targetItemCount` (number) - the number of items to put in each group when using the `'EqualItemCount'` partition strategy.
-    - `options.targetGroupWCU` (number) - the total WCU for each group in the `'EvenlyDistributedGroupWCU'` partition strategy.
+- `getItem(params)` - Gets a single item from DynamoDB
+- `updateItem(params)` - Updates a single item in DynamoDB
+- `putItem(params)` - Puts a single item into DynamoDB
+- `deleteItem(params)` - Deletes a single item from DynammoDB
+- `query(params, options)` - Fetches all pages of data from a DynamoDB query, making multiple requests and aggregating responses when necessary.
+    - `options.groupDelayMs` (number) - the delay between individual requests. Overrides the configuration property of the same name in the constructor. Defaults to 100 ms.
+- `scan(params, options)` - Fetches all pages of data from a DynamoDB scan, making multiple requests and aggregating responses when necessary.
+    - `options.groupDelayMs` (number) - the delay between individual requests. Overrides the configuration property of the same name in the constructor. Defaults to 100 ms.
+- `batchWriteItem(params, options)` - Writes or deletes large collections of items in a single DynamoDB table, batching items and making multiple requests when necessary.
+    - `options.groupDelayMs` (number) - the delay between individual requests. Overrides the configuration property of the same name in the constructor. Defaults to 100 ms.
+    - `options.partitionStrategy` (string) - strategy to use when partitioning the write requests array:
+        - `'EqualItemCount'` - creates groups with an equal number of items.
+        - `'EvenlyDistributedGroupWCU'` - creates groups with equalized total WCU, allowing for variable item counts.
+    - `options.targetItemCount` (number) - the number of items to put in each group when using the *EqualItemCount* partition strategy.
+    - `options.targetGroupWCU` (number) - the total WCU for each group in the *EvenlyDistributedGroupWCU* partition strategy.
 
 ## Roadmap
 
