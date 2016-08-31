@@ -9,28 +9,23 @@ function testAsync(fn) {
     };
 }
 
-class MockDynamoDB {
-    public throttleRequests: number[];
-    public unprocessedItemsRequests: number[];
+declare interface ICustomResponses {
+    // 'ProvisionedThroughputExceededException'
+    // 'SomeUnprocessedItems'
+    // 'AllUnprocessedItems'
+    // 'ValidationException'
+    [key: number]: string;
+}
 
-    public tableData: any;
+class MockDynamoDB {
     private _countRequests: number;
+    private _customResponses: ICustomResponses;
 
     constructor(options?: any) {
         options = options || {};
-        this.throttleRequests = options.throttleRequests || [];
-        this.unprocessedItemsRequests = options.unprocessedItemsRequests || [];
 
-        this.tableData = {};
+        this._customResponses = options.customResponses || {};
         this._countRequests = 0;
-    }
-
-    public shouldThrottleThisResponse() {
-        return this.throttleRequests.indexOf(this._countRequests) > -1;
-    }
-
-    public shouldHaveUnprocessedItemsOnThisResponse() {
-        return this.unprocessedItemsRequests.indexOf(this._countRequests) > -1;
     }
 
     public getItem() {
@@ -51,16 +46,18 @@ class MockDynamoDB {
                 return new Promise((resolve, reject) => {
                     this._countRequests++;
 
-                    if (this.shouldThrottleThisResponse()) {
+                    if (this._isAllValidationException()) {
+                        reject({
+                            code: 'ValidationException',
+                            statusCode: 400
+                        });
+                    } else if (this._isThroughputExceeded()) {
                         reject({
                             code: 'ProvisionedThroughputExceededException',
                             statusCode: 400
                         });
                     } else {
                         // case: put item successful
-                        const tableName = params.TableName;
-                        this.tableData[tableName] = this.tableData[tableName] || [];
-                        this.tableData[tableName].push(params.Item);
                         resolve({
                             ConsumedCapacity: { CapacityUnits: 1 }
                         });
@@ -84,7 +81,7 @@ class MockDynamoDB {
                 return new Promise((resolve, reject) => {
                     this._countRequests++;
 
-                    if (this.shouldThrottleThisResponse()) {
+                    if (this._isThroughputExceeded()) {
                         reject({
                             code: 'ProvisionedThroughputExceededException',
                             statusCode: 400
@@ -93,16 +90,16 @@ class MockDynamoDB {
                         let tableNames = Object.keys(params.RequestItems);
                         let response = {};
 
-                        if (this.shouldHaveUnprocessedItemsOnThisResponse()) {
+                        if (this._isAllUnprocessedItems()) {
+                            // case: PutRequest failed for all items
                             response['UnprocessedItems'] = params.RequestItems;
+                        } else if (this._isSomeUnprocessedItems()) {
+                            // case: PutRequest succeeded for 1st item, failed for all the others
+                            let tableName = Object.keys(params.RequestItems)[0];
+                            response['UnprocessedItems'] = params.RequestItems;
+                            response['UnprocessedItems'][tableName] = response['UnprocessedItems'][tableName].slice(1);
                         } else {
-                            // case: put item successful
-                            for (let tableName of tableNames) {
-                                this.tableData[tableName] = this.tableData[tableName] || [];
-                                for (let writeRequest of params.RequestItems[tableName]) {
-                                    this.tableData[tableName].push(writeRequest.PutRequest.Item);
-                                }
-                            }
+                            // case: PutRequest succeeded for all items
                         }
 
                         if (params.ReturnConsumedCapacity === 'INDEXES') {
@@ -200,6 +197,22 @@ class MockDynamoDB {
                 });
             }
         };
+    }
+
+    private _isThroughputExceeded() {
+        return this._customResponses[this._countRequests] === 'ProvisionedThroughputExceededException';
+    }
+
+    private _isSomeUnprocessedItems() {
+        return this._customResponses[this._countRequests] === 'SomeUnprocessedItems';
+    }
+
+    private _isAllUnprocessedItems() {
+        return this._customResponses[this._countRequests] === 'AllUnprocessedItems';
+    }
+
+    private _isAllValidationException() {
+        return this._customResponses[this._countRequests] === 'ValidationException';
     }
 
 }
@@ -333,13 +346,21 @@ describe('lib/dynamodb-wrapper', () => {
 
     describe('putItem()', () => {
 
-        function _setupPutItemParams(): DynamoDB.PutItemInput {
-            return {
+        function _setupPutItemParams(options?): DynamoDB.PutItemInput {
+            options = options || {};
+
+            let params: any = {
                 TableName: 'Test',
                 Item: {
                     MyPartitionKey: { N: '1' }
                 }
             };
+
+            if (options.ReturnConsumedCapacity) {
+                params.ReturnConsumedCapacity = options.ReturnConsumedCapacity;
+            }
+
+            return params;
         }
 
         it('should put item', testAsync(() => {
@@ -358,10 +379,41 @@ describe('lib/dynamodb-wrapper', () => {
             return test();
         }));
 
+        it('should emit a "consumedCapacity" event when a response contains a ConsumedCapacity object', testAsync(() => {
+            async function test() {
+                let params = _setupPutItemParams({ ReturnConsumedCapacity: 'TOTAL' });
+                let mock = _setupDynamoDBWrapper();
+                let dynamoDB = mock.dynamoDB;
+                let dynamoDBWrapper = mock.dynamoDBWrapper;
+
+                let event = null;
+
+                dynamoDBWrapper.events.on('consumedCapacity', function onConsumedCapacity(e) {
+                    event = e;
+                });
+
+                await dynamoDBWrapper.putItem(params);
+
+                expect(event).toEqual({
+                    method: 'putItem',
+                    capacityType: 'WriteCapacityUnits',
+                    consumedCapacity: {
+                        CapacityUnits: 1
+                    }
+                });
+            }
+
+            return test();
+        }));
+
         it('should retry a failed request (throttled)', testAsync(() => {
             async function test() {
                 let params = _setupPutItemParams();
-                let mock = _setupDynamoDBWrapper({ throttleRequests: [1] });
+                let mock = _setupDynamoDBWrapper({
+                    customResponses: {
+                        1: 'ProvisionedThroughputExceededException'
+                    }
+                });
                 let dynamoDB = mock.dynamoDB;
                 let dynamoDBWrapper = mock.dynamoDBWrapper;
 
@@ -374,10 +426,46 @@ describe('lib/dynamodb-wrapper', () => {
             return test();
         }));
 
+        it('should emit a "retry" event when retrying a failed request', testAsync(() => {
+            async function test() {
+                let params = _setupPutItemParams();
+                let mock = _setupDynamoDBWrapper({
+                    customResponses: {
+                        1: 'ProvisionedThroughputExceededException'
+                    }
+                });
+                let dynamoDB = mock.dynamoDB;
+                let dynamoDBWrapper = mock.dynamoDBWrapper;
+
+                let event = null;
+
+                dynamoDBWrapper.events.on('retry', function onRetry(e) {
+                    event = e;
+                });
+
+                await dynamoDBWrapper.putItem(params);
+
+                expect(event).toEqual({
+                    tableName: 'Test',
+                    method: 'putItem',
+                    retryCount: 1,
+                    retryDelayMs: 0
+                });
+            }
+
+            return test();
+        }));
+
         it('should throw a fatal exception when the maximum number of retries is exceeded', testAsync(() => {
             async function test() {
                 let params = _setupPutItemParams();
-                let mock = _setupDynamoDBWrapper({ throttleRequests: [1, 2, 3] });
+                let mock = _setupDynamoDBWrapper({
+                    customResponses: {
+                        1: 'ProvisionedThroughputExceededException',
+                        2: 'ProvisionedThroughputExceededException',
+                        3: 'ProvisionedThroughputExceededException'
+                    }
+                });
                 let dynamoDB = mock.dynamoDB;
                 let dynamoDBWrapper = mock.dynamoDBWrapper;
                 dynamoDBWrapper.retryDelayOptions.customBackoff = function (retryCount) {
@@ -395,6 +483,31 @@ describe('lib/dynamodb-wrapper', () => {
 
                 expect(dynamoDB.putItem).toHaveBeenCalledTimes(3);
                 expect(exception.code).toBe('ProvisionedThroughputExceededException');
+                expect(exception.statusCode).toBe(400);
+            }
+
+            return test();
+        }));
+
+        it('should pass AWS non-retryable errors through', testAsync(() => {
+            async function test() {
+                let params = _setupPutItemParams();
+                let mock = _setupDynamoDBWrapper({
+                    customResponses: {
+                        1: 'ValidationException'
+                    }
+                });
+                let dynamoDB = mock.dynamoDB;
+                let dynamoDBWrapper = mock.dynamoDBWrapper;
+
+                let exception;
+                try {
+                    await dynamoDBWrapper.putItem(params);
+                } catch (e) {
+                    exception = e;
+                }
+
+                expect(exception.code).toBe('ValidationException');
                 expect(exception.statusCode).toBe(400);
             }
 
@@ -709,10 +822,14 @@ describe('lib/dynamodb-wrapper', () => {
             return test();
         }));
 
-        it('should retry failed requests (throttled)', testAsync(() => {
+        it('should retry failed requests when there are UnprocessedItems', testAsync(() => {
             async function test() {
                 let params = _setupBatchWriteItemParams();
-                let mock = _setupDynamoDBWrapper({ unprocessedItemsRequests: [1] });
+                let mock = _setupDynamoDBWrapper({
+                    customResponses: {
+                        1: 'AllUnprocessedItems'
+                    }
+                });
                 let dynamoDB = mock.dynamoDB;
                 let dynamoDBWrapper = mock.dynamoDBWrapper;
 
@@ -730,12 +847,47 @@ describe('lib/dynamodb-wrapper', () => {
             return test();
         }));
 
-        it('should throw a fatal exception when the maximum number of retries is exceeded', testAsync(() => {
+        it('should return a 200 OK response if some items were processed, but others were not', testAsync(() => {
             async function test() {
                 let params = _setupBatchWriteItemParams();
-                let mock = _setupDynamoDBWrapper({ unprocessedItemsRequests: [1, 2, 3] });
+                let mock = _setupDynamoDBWrapper({
+                    customResponses: {
+                        1: 'AllUnprocessedItems',
+                        2: 'AllUnprocessedItems',
+                        3: 'SomeUnprocessedItems'
+                    }
+                });
                 let dynamoDB = mock.dynamoDB;
                 let dynamoDBWrapper = mock.dynamoDBWrapper;
+
+                spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
+
+                let response = await dynamoDBWrapper.batchWriteItem(params, {
+                    partitionStrategy: 'EqualItemCount',
+                    targetItemCount: 10
+                });
+
+                expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(3);
+                expect(response.UnprocessedItems['Test'].length).toEqual(9);
+            }
+
+            return test();
+        }));
+
+        it('should throw a ProvisionedThroughputExceededException if ALL items are unprocessed', testAsync(() => {
+            async function test() {
+                let params = _setupBatchWriteItemParams();
+                let mock = _setupDynamoDBWrapper({
+                    customResponses: {
+                        1: 'AllUnprocessedItems',
+                        2: 'AllUnprocessedItems',
+                        3: 'AllUnprocessedItems'
+                    }
+                });
+                let dynamoDB = mock.dynamoDB;
+                let dynamoDBWrapper = mock.dynamoDBWrapper;
+
+                spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
 
                 let exception;
                 try {
@@ -747,6 +899,7 @@ describe('lib/dynamodb-wrapper', () => {
                     exception = e;
                 }
 
+                expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(3);
                 expect(exception.code).toBe('ProvisionedThroughputExceededException');
                 expect(exception.message).toBe('The level of configured provisioned throughput for the table was exceeded. ' +
                     'Consider increasing your provisioning level with the UpdateTable API');

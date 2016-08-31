@@ -9,6 +9,7 @@ describe('lib/error-types', () => {
     it('should define error codes', () => {
         expect(ErrorCode).toEqual({
             ProvisionedThroughputExceededException: 'ProvisionedThroughputExceededException',
+            ThrottlingException: 'ThrottlingException',
             NotYetImplementedError: 'NotYetImplementedError'
         });
     });

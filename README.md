@@ -16,7 +16,8 @@
 
 - **Enhanced AWS SDK:** Public interface closely resembles the AWS SDK, making it easier to learn and use.
 - **Bulk I/O:** Easily read, write or delete entire collections of items in DynamoDB with a single API call.
-- **Table prefixes:** If you have multiple environments in the same AWS Account (e.g. "dev-MyTable" and "stage-MyTable"), give DynamoDBWrapper a table prefix and it will automatically prepend it to all requests and remove it from all responses - so that you don't have to think about prefixes in your application.
+- **Events:** Add event hooks to be notified of important events, such as whenever read/write capacity is consumed, or requests are retried due to throttling.
+- **Table prefixes:** DynamoDBWrapper can add a table name prefix in requests and remove it in responses. This is helpful if you have multiple environments within the same AWS Account.
 
 ## Installing
 
@@ -26,25 +27,64 @@ npm install dynamodb-wrapper
 
 ## Usage
 
-### Construct the DynamoDBWrapper class
+### Setup
+
+Construct the DynamoDBWrapper class
 
 ```js
-// require npm dependencies
 var AWS = require('aws-sdk');
 var DynamoDBWrapper = require('dynamodb-wrapper');
 
-// construct the AWS SDK's DynamoDB object
 var dynamoDB = new AWS.DynamoDB();
 
-// construct the DynamoDBWrapper object
+// see the Configuration section of the README for more options
 var dynamoDBWrapper = new DynamoDBWrapper(dynamoDB, {
-    // see the Configuration section of the README for more info
-    groupDelayMs: 200,
+    // enable DynamoDBWrapper retries
     maxRetries: 6,
     retryDelayOptions: {
         base: 100
     }
 });
+```
+
+(Optional) If you enable DynamoDBWrapper retries (shown above), you can add a `retry` event listener to be notified when requests are throttled. In your application, you can log these events, or even respond by increasing provisioned throughput on the affected table.
+
+```
+dynamoDBWrapper.events.on('retry', function (e) {
+    console.log(
+        'An API call to DynamoDB.' + e.method + '() acting on table ' +
+        e.tableName + ' was throttled. Retry attempt #' + e.retryCount +
+        ' will occur after a delay of ' + e.retryDelayMs + 'ms.'
+    );
+});
+
+// An API call to DynamoDB.batchWriteItem() acting on table dev-Test
+// was throttled. Retry attempt #1 will occur after a delay of 200ms.
+
+// An API call to DynamoDB.batchWriteItem() acting on table dev-Test
+// was throttled. Retry attempt #2 will occur after a delay of 400ms.
+
+// An API call to DynamoDB.batchWriteItem() acting on table dev-Test
+// was throttled. Retry attempt #3 will occur after a delay of 800ms.
+```
+
+(Optional) If you use the `ReturnConsumedCapacity` property in your AWS requests, the `consumedCapacity` event listener can notify you whenever read/write capacity is consumed. 
+
+```
+dynamoDBWrapper.events.on('consumedCapacity', function (e) {
+    console.log(
+        'An API call to DynamoDB.' + e.method + '() consumed ' +
+        e.capacityType, JSON.stringify(e.consumedCapacity, null, 2)
+    );
+});
+
+// An API call to DynamoDB.batchWriteItem() consumed WriteCapacityUnits
+// [
+//   {
+//     "TableName": "Test",
+//     "CapacityUnits": 20
+//   }
+// ]
 ```
 
 ### Example: Bulk Read
@@ -80,7 +120,7 @@ dynamoDBWrapper.query(sampleQueryParams)
 
 ### Example: Bulk Write/Delete
 
-Insert or delete large collections of items in a DynamoDB table with a single API call. DynamoDBWrapper automatically batches your requests and aggregates the results into a single response.
+Insert or delete large collections of items in a DynamoDB table with a single API call. DynamoDBWrapper batches your requests and aggregates the results into a single response. Use configuration values to fine tune throughput consumption for your use case.
 
 @see http://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchWriteItem.html
 
@@ -113,6 +153,7 @@ var sampleParams = {
 // or rejects immediately if an error occurs
 
 dynamoDBWrapper.batchWriteItem(sampleParams, {
+    // use configuration to control and optimize throughput consumption
     partitionStrategy: 'EvenlyDistributedGroupWCU',
     targetGroupWCU: 50,
     groupDelayMs: 1000
@@ -155,13 +196,9 @@ The `DynamoDBWrapper` class supports the following methods, which are wrappers a
         - `'EqualItemCount'` - creates groups with an equal number of items.
         - `'EvenlyDistributedGroupWCU'` - creates groups with equalized total WCU, allowing for variable item counts.
     - `options.targetItemCount` (number) - the number of items to put in each group when using the *EqualItemCount* partition strategy.
-    - `options.targetGroupWCU` (number) - the total WCU for each group in the *EvenlyDistributedGroupWCU* partition strategy.
+    - `options.targetGroupWCU` (number) - the size threshold (in WriteCapacityUnits) of each group when using the *EvenlyDistributedGroupWCU* partition strategy.
 
 ## Roadmap
 
 - **BatchGetItem:** Add support for `BatchGetItem` as part of the "Bulk Read" feature set.
-- **Event Hooks:** Use an EventEmitter to hook into events for logging and visibility
-    - "read" - be notified whenever a request consumes read throughput, so that you can log it or adjust configured throughput levels
-    - "write" - be notified whenever a request consumes write throughput, so that you can log it or adjust configured throughput levels
-    - "retry" - be notified when a request is retried due to throttling, so that you can log it or increase configured throughput levels
 - **Streams:** Add method signatures that return Streams (instead of Promises), allowing for better integration ecosystems such as gulp

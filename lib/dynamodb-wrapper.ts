@@ -5,7 +5,7 @@ import { EventEmitter } from 'events';
 import { DynamoDB } from 'aws-sdk';
 import { ErrorCode, ErrorMessage, Exception } from './error-types';
 import { getNextGroupByItemCount, getNextGroupByTotalWCU } from './partition-strategy';
-import { addTablePrefixToRequest, removeTablePrefixFromResponse } from './table-prefixes';
+import { addTablePrefixToRequest, removeTablePrefixFromResponse, removePrefix } from './table-prefixes';
 
 export class DynamoDBWrapper {
     public dynamoDB: any;
@@ -129,22 +129,12 @@ export class DynamoDBWrapper {
     /**
      * A lightweight wrapper around the DynamoDB BatchWriteItem method.
      *
-     * The DynamoDB BatchWriteItem method only supports an array of at most 25 requests. This method
-     * supports an unlimited number of requests, and will partition the requests into groups of count <= 25,
-     * making multiple calls to the underlying DynamoDB BatchWriteItem method if there is more than 1 group.
-     * The partition strategy is configurable:
+     * The underlying DynamoDB BatchWriteItem method only supports an array of at most 25 requests.
+     * This method supports an unlimited number of requests, and will partition the requests into
+     * groups of count <= 25, making multiple calls to the underlying DynamoDB BatchWriteItem method
+     * if there is more than 1 group.
      *
-     * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-     *
-     * The EqualItemCount partition strategy is the "simple" approach to partitioning, which works well
-     * when all your items have predicable, equal size in WCU.
-     *
-     * For example, with partitionStrategy="EqualItemCount" and targetItemCount=10, an array of 32 items would be
-     * partitioned into 4 groups as [10], [10], [10], [2]. The first 3 groups would have 10 items each, and the
-     * remaining 2 items would be in the last group. The underlying DynamoDB BatchWriteItem method would be called
-     * a total of 4 times - once for each group in the partition.
-     *
-     * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+     * See partition-strategy.ts for partition implementation details.
      *
      * @param params
      * @param [options]
@@ -154,6 +144,12 @@ export class DynamoDBWrapper {
     public async batchWriteItem(params: DynamoDB.BatchWriteItemInput,
                                 options?: IBatchWriteItemOptions): Promise<DynamoDB.BatchWriteItemOutput> {
 
+        // set default options
+        options = options || {};
+        options.groupDelayMs = _getNonNegativeInteger(options.groupDelayMs, this.groupDelayMs);
+        options.targetGroupWCU = _getPositiveInteger(options.targetGroupWCU, 5);
+        options.targetItemCount = _getPositiveInteger(options.targetItemCount, 25);
+
         // validate parameters to check for features not yet implemented
         _validateBatchWriteItemParams(params);
 
@@ -161,12 +157,6 @@ export class DynamoDBWrapper {
 
         const tableName = _extractTableNameFromRequest(params);
         const totalRequestItems = params.RequestItems[tableName].length;
-
-        // set default options
-        options = options || {};
-        options.groupDelayMs = _getNonNegativeInteger(options.groupDelayMs, this.groupDelayMs);
-        options.targetGroupWCU = _getPositiveInteger(options.targetGroupWCU, 5);
-        options.targetItemCount = _getPositiveInteger(options.targetItemCount, 25);
 
         let responses = await this._batchWriteItemHelper(tableName, params, options);
         return _makeBatchWriteItemResponse(tableName, totalRequestItems, responses);
@@ -233,61 +223,80 @@ export class DynamoDBWrapper {
         return list;
     }
 
+    /**
+     * Entry point for calling into the AWS SDK. This is the centralized location for retry logic and events.
+     * All DynamoDBWrapper public methods are funneled through here.
+     *
+     * @param method
+     * @param params
+     * @returns {any}
+     * @private
+     */
+
     private async _callDynamoDB(method: string, params: any): Promise<any> {
-        let retry, response, err;
-        let tableName = _extractTableNameFromRequest(params);
         let retryCount = 0;
+        let responses = [];
+        let shouldRetry, result, error;
 
         do {
-            retry = false;
+            shouldRetry = false;
+            result = null;
 
             try {
-                response = await this.dynamoDB[method](params).promise();
-                removeTablePrefixFromResponse(this.tableNamePrefix, response);
+                result = await this.dynamoDB[method](params).promise();
+                responses.push(result);
+                removeTablePrefixFromResponse(this.tableNamePrefix, result);
+                this._emitConsumedCapacitySummary(method, result);
 
                 // BatchWriteItem: retry unprocessed items
-                if (response.UnprocessedItems && Object.keys(response.UnprocessedItems).length > 0) {
-                    params.RequestItems = response.UnprocessedItems;
-                    retry = true;
+                if (result.UnprocessedItems && Object.keys(result.UnprocessedItems).length > 0) {
+                    params.RequestItems = result.UnprocessedItems;
+                    shouldRetry = true;
                 }
             } catch (e) {
-                err = e;
-                if (e.statusCode === 500 || e.statusCode === 503 ||
-                    e.code === ErrorCode.ProvisionedThroughputExceededException) {
-                    retry = true;
+                error = e;
+                if (e.code === ErrorCode.ProvisionedThroughputExceededException ||
+                        e.code === ErrorCode.ThrottlingException || e.statusCode === 500 || e.statusCode === 503) {
+                    shouldRetry = true;
                 } else {
                     throw e;
                 }
             }
 
-            if (retry) {
+            if (shouldRetry) {
                 retryCount++;
                 let waitMs = this._backoffFunction(retryCount);
+                let tableName = removePrefix(this.tableNamePrefix, _extractTableNameFromRequest(params));
                 this.events.emit('retry', {
                     tableName: tableName,
                     method: method,
                     retryCount: retryCount,
-                    waitMs: waitMs
+                    retryDelayMs: waitMs
                 });
                 await this._wait(waitMs);
             }
 
-        } while (retry && retryCount <= this.maxRetries);
+        } while (shouldRetry && retryCount <= this.maxRetries);
 
         if (retryCount > this.maxRetries) {
+            // BatchWriteItem always returns UnprocessedItems, allowing the upstream method
+            // to aggregate them and decide what to do
             if (method === 'batchWriteItem') {
-                // BatchWriteItem: always return unprocessed items, allowing the upstream method
-                // to decide what to do with them (throw error or return to sender)
-                response = response || {};
-                response.UnprocessedItems = response.UnprocessedItems && Object.keys(response.UnprocessedItems).length > 0
-                    ? response.UnprocessedItems
+                // 1. aggregate data from successful responses
+                result = {};
+                _aggregateConsumedCapacityMultipleFromResponses(responses, result);
+
+                // 2. set UnprocessedItems equal to the UnprocessedItems from the last response
+                // in the successfulResponses array, or params.RequestItems if there were no successful responses
+                result.UnprocessedItems = responses.length > 0
+                    ? responses[responses.length - 1].UnprocessedItems
                     : params.RequestItems;
             } else {
-                throw err;
+                throw error;
             }
         }
 
-        return response;
+        return result;
     }
 
     private _backoffFunction(retryCount: number): number {
@@ -306,10 +315,48 @@ export class DynamoDBWrapper {
         });
     }
 
+    private _emitConsumedCapacitySummary(method: string, response: any) {
+        if (response.ConsumedCapacity) {
+            let capacityType = _getMethodCapacityUnitsType(method);
+            if (capacityType) {
+                if (Array.isArray(response.ConsumedCapacity)) {
+                    this.events.emit('consumedCapacity', {
+                        method: method,
+                        capacityType: capacityType,
+                        consumedCapacity: response.ConsumedCapacity
+                    });
+                } else {
+                    this.events.emit('consumedCapacity', {
+                        method: method,
+                        capacityType: capacityType,
+                        consumedCapacity: response.ConsumedCapacity
+                    });
+                }
+            }
+        }
+    }
+
 }
 
 function _extractTableNameFromRequest(params: any): string {
     return params.RequestItems ? Object.keys(params.RequestItems)[0] : params.TableName;
+}
+
+function _getMethodCapacityUnitsType(method: string) {
+    /* tslint:disable:switch-default */
+    switch (method) {
+        case 'getItem':
+        case 'query':
+        case 'scan':
+        case 'batchGetItem':
+            return 'ReadCapacityUnits';
+        case 'putItem':
+        case 'updateItem':
+        case 'deleteItem':
+        case 'batchWriteItem':
+            return 'WriteCapacityUnits';
+    }
+    /* tslint:enable:switch-default */
 }
 
 function _makeQueryOrScanResponse(responses: any): any {
@@ -339,41 +386,50 @@ function _makeQueryOrScanResponse(responses: any): any {
 
 function _makeBatchWriteItemResponse(tableName: string, totalRequestItems: number,
                                      responses: DynamoDB.BatchWriteItemOutput[]): DynamoDB.BatchWriteItemOutput {
-    let items = [];
+
+    let totalUnprocessedItems = [];
 
     for (let res of responses) {
         if (res.UnprocessedItems) {
-            _appendArray(items, res.UnprocessedItems[tableName]);
+            _appendArray(totalUnprocessedItems, res.UnprocessedItems[tableName]);
         }
     }
 
     // if all items are unprocessed, throw an error
-    if (items.length === totalRequestItems) {
+    if (totalUnprocessedItems.length === totalRequestItems) {
         throw new Exception(
             ErrorCode.ProvisionedThroughputExceededException,
             ErrorMessage.ProvisionedThroughputExceededException
         );
     }
 
-    // otherwise, construct a response
+    // otherwise, construct a 200 OK response
     let result: any = {};
 
-    if (items.length > 0) {
+    if (totalUnprocessedItems.length > 0) {
         result.UnprocessedItems = {};
-        result.UnprocessedItems[tableName] = items;
+        result.UnprocessedItems[tableName] = totalUnprocessedItems;
     }
 
-    if (responses[0].ConsumedCapacity) {
-        let listCCM = [];
+    _aggregateConsumedCapacityMultipleFromResponses(responses, result);
+
+    return result;
+}
+
+function _aggregateConsumedCapacityMultipleFromResponses(responses: any[], result: any): void {
+    let listCCM = [];
+
+    if (responses.length > 0) {
         for (let res of responses) {
             if (res.ConsumedCapacity) {
                 listCCM.push(res.ConsumedCapacity);
             }
         }
-        result.ConsumedCapacity = _aggregateConsumedCapacityMultiple(listCCM);
     }
 
-    return result;
+    if (listCCM.length > 0) {
+        result.ConsumedCapacity = _aggregateConsumedCapacityMultiple(listCCM);
+    }
 }
 
 function _aggregateConsumedCapacityMultiple(listCCM: DynamoDB.ConsumedCapacityMultiple[]): DynamoDB.ConsumedCapacityMultiple {

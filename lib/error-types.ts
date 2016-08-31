@@ -1,5 +1,6 @@
 export const ErrorCode = {
     ProvisionedThroughputExceededException: 'ProvisionedThroughputExceededException',
+    ThrottlingException: 'ThrottlingException',
     NotYetImplementedError: 'NotYetImplementedError'
 };
 

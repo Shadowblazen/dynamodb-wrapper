@@ -34,14 +34,29 @@ export function removeTablePrefixFromResponse(prefix: string, response: any): vo
             // used in BatchGetItem, BatchWriteItem
             if (Array.isArray(response.ConsumedCapacity)) {
                 for (let consumedCapacity of response.ConsumedCapacity) {
-                    consumedCapacity.TableName = _removePrefix(prefix, consumedCapacity.TableName);
+                    consumedCapacity.TableName = removePrefix(prefix, consumedCapacity.TableName);
                 }
             } else {
                 // used in most API methods
-                response.ConsumedCapacity.TableName = _removePrefix(prefix, response.ConsumedCapacity.TableName);
+                response.ConsumedCapacity.TableName = removePrefix(prefix, response.ConsumedCapacity.TableName);
             }
         }
     }
+}
+
+export function removePrefix(prefix: string, tableName: string) {
+    return tableName.substr(prefix.length);
+}
+
+function _removePrefixes(prefix: string, map) {
+    let outMap = {};
+    for (let tableName in map) {
+        /* tslint:disable:forin */
+        // noinspection JSUnfilteredForInLoop
+        outMap[removePrefix(prefix, tableName)] = map[tableName];
+        /* tslint:enable:forin */
+    }
+    return outMap;
 }
 
 function _addPrefixes(prefix: string, map: any): any {
@@ -57,19 +72,4 @@ function _addPrefixes(prefix: string, map: any): any {
 
 function _addPrefix(prefix: string, tableName: string): string {
     return prefix + tableName;
-}
-
-function _removePrefix(prefix: string, tableName: string) {
-    return tableName.substr(prefix.length);
-}
-
-function _removePrefixes(prefix: string, map) {
-    let outMap = {};
-    for (let tableName in map) {
-        /* tslint:disable:forin */
-        // noinspection JSUnfilteredForInLoop
-        outMap[_removePrefix(prefix, tableName)] = map[tableName];
-        /* tslint:enable:forin */
-    }
-    return outMap;
 }
