@@ -35,11 +35,14 @@ Construct the DynamoDBWrapper class
 var AWS = require('aws-sdk');
 var DynamoDBWrapper = require('dynamodb-wrapper');
 
-var dynamoDB = new AWS.DynamoDB();
+var dynamoDB = new AWS.DynamoDB({
+    // optionally disable AWS retry logic - reasoning explained below
+    maxRetries: 0
+});
 
 // see the Configuration section of the README for more options
 var dynamoDBWrapper = new DynamoDBWrapper(dynamoDB, {
-    // enable DynamoDBWrapper retries
+    // optionally enable DynamoDBWrapper retry logic
     maxRetries: 6,
     retryDelayOptions: {
         base: 100
@@ -47,7 +50,11 @@ var dynamoDBWrapper = new DynamoDBWrapper(dynamoDB, {
 });
 ```
 
-(Optional) If you enable DynamoDBWrapper retries (shown above), you can add a `retry` event listener to be notified when requests are throttled. In your application, you can log these events, or even respond by increasing provisioned throughput on the affected table.
+*(Optional)* If you use DynamoDBWrapper retry logic instead of AWS retry logic, you gain the following benefits:
+
+1. Improved batch processing: DynamoDBWrapper will automatically retry any *UnprocessedItems* in your `batchWriteItem` requests.
+2. You can add a `retry` event listener to be notified when requests are throttled. In your application, you can log these events, or even respond by increasing provisioned throughput on the affected table.
+3. DynamoDBWrapper's `retryDelayOptions` actually work as documented (this functionality doesn't work in the AWS JavaScript SDK yet, but there's an [open ticket for this feature request](https://github.com/aws/aws-sdk-js/issues/1100)).
 
 ```
 dynamoDBWrapper.events.on('retry', function (e) {
@@ -58,17 +65,17 @@ dynamoDBWrapper.events.on('retry', function (e) {
     );
 });
 
-// An API call to DynamoDB.batchWriteItem() acting on table dev-Test
+// An API call to DynamoDB.batchWriteItem() acting on table MyTable
 // was throttled. Retry attempt #1 will occur after a delay of 200ms.
 
-// An API call to DynamoDB.batchWriteItem() acting on table dev-Test
+// An API call to DynamoDB.batchWriteItem() acting on table MyTable
 // was throttled. Retry attempt #2 will occur after a delay of 400ms.
 
-// An API call to DynamoDB.batchWriteItem() acting on table dev-Test
+// An API call to DynamoDB.batchWriteItem() acting on table MyTable
 // was throttled. Retry attempt #3 will occur after a delay of 800ms.
 ```
 
-(Optional) If you use the `ReturnConsumedCapacity` property in your AWS requests, the `consumedCapacity` event listener can notify you whenever read/write capacity is consumed. 
+*(Optional)* If you use the `ReturnConsumedCapacity` property in your AWS requests, the `consumedCapacity` event listener can notify you whenever read/write capacity is consumed. 
 
 ```
 dynamoDBWrapper.events.on('consumedCapacity', function (e) {
@@ -81,7 +88,7 @@ dynamoDBWrapper.events.on('consumedCapacity', function (e) {
 // An API call to DynamoDB.batchWriteItem() consumed WriteCapacityUnits
 // [
 //   {
-//     "TableName": "Test",
+//     "TableName": "MyTable",
 //     "CapacityUnits": 20
 //   }
 // ]
@@ -180,7 +187,7 @@ The `DynamoDBWrapper` constructor accepts an optional configuration object with 
 
 ## API
 
-The `DynamoDBWrapper` class supports the following methods, which are wrappers around the AWS SDK method of the same name. Please refer to the AWS [API documentation](http://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_Operations.html) and [JavaScript SDK documentation](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/DynamoDB.html) for more details:
+The `DynamoDBWrapper` class supports a Promise-based API with the following methods. These are wrappers around the AWS SDK method of the same name. Please refer to the AWS [API documentation](http://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_Operations.html) and [JavaScript SDK documentation](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/DynamoDB.html) for more details:
 
 - `getItem(params)` - Gets a single item from DynamoDB
 - `updateItem(params)` - Updates a single item in DynamoDB
