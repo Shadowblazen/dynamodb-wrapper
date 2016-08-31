@@ -13,3 +13,5 @@ before_install:
   - npm install -g npm
   - npm install -g gulp
 script: gulp
+after_success:
+  - npm run coveralls

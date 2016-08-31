@@ -1,3 +1,17 @@
+[![NPM version][npm-image]][npm-url] [![Build Status][travis-image]][travis-url] [![Coverage Status][coveralls-image]][coveralls-url] [![License][license-image]][license-url]
+
+[npm-image]: https://img.shields.io/npm/v/dynamodb-wrapper.svg
+[npm-url]: https://www.npmjs.com/package/dynamodb-wrapper
+
+[travis-image]: https://img.shields.io/travis/Shadowblazen/dynamodb-wrapper.svg
+[travis-url]: https://travis-ci.org/Shadowblazen/dynamodb-wrapper
+
+[coveralls-image]: https://img.shields.io/coveralls/Shadowblazen/dynamodb-wrapper.svg
+[coveralls-url]: https://coveralls.io/github/Shadowblazen/dynamodb-wrapper?branch=master
+
+[license-image]: https://img.shields.io/npm/l/dynamodb-wrapper.svg
+[license-url]: https://opensource.org/licenses/MIT
+
 ## What is dynamodb-wrapper?
 
 - **Enhanced AWS SDK:** Public interface closely resembles the AWS SDK, making it easier to learn and use.
