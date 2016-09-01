@@ -64,7 +64,15 @@ gulp.task('copy.assets', function () {
 });
 
 gulp.task('clean', function (done) {
-    cleanDir('bin', done);
+    del(['bin', 'coverage']).then(function () {
+        done();
+    });
+});
+
+gulp.task('prepublish', function (done) {
+    del(['bin/jasmine-runner.js', 'bin/**/*.spec.js']).then(function () {
+        done();
+    });
 });
 
 /*********************************************************************************************************************
@@ -113,13 +121,3 @@ gulp.task('lint', function () {
 gulp.task('watch.lib', function () {
     gulp.watch(['lib/**/*.ts'], ['build', 'lint.noerror']);
 });
-
-/*********************************************************************************************************************
- * Private helper methods
- *********************************************************************************************************************/
-
-function cleanDir(dir, done) {
-    del(dir).then(function () {
-        done();
-    });
-}

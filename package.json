@@ -8,31 +8,29 @@
   },
   "main": "index.js",
   "scripts": {
-    "prepublish": "gulp",
+    "prepublish": "gulp && gulp prepublish",
     "test": "gulp",
     "coveralls": "cat ./coverage/lcov.info | ./node_modules/coveralls/bin/coveralls.js && rm -rf ./coverage"
   },
   "files": [
     "index.js",
     "index.d.ts",
-    "bin/dynamodb-wrapper.js",
-    "bin/error-types.js",
-    "bin/estimate-item-size.js",
-    "bin/partition-strategy.js",
-    "bin/table-prefixes.js"
+    "bin"
   ],
   "keywords": [
-    "aws",
     "dynamodb",
-    "bcp",
+    "wrapper",
+    "aws",
+    "sdk",
+    "aws-sdk",
+    "batch",
+    "processing",
     "bulk",
     "copy",
-    "wrap",
-    "wrapper",
-    "util",
-    "utility",
-    "batching",
-    "retries"
+    "bcp",
+    "migrate",
+    "import",
+    "export"
   ],
   "author": {
     "name": "Jeff Bradford",
