@@ -12,7 +12,6 @@ function testAsync(fn) {
 declare interface ICustomResponses {
     // 'ProvisionedThroughputExceededException'
     // 'SomeUnprocessedItems'
-    // 'AllUnprocessedItems'
     // 'ValidationException'
     [key: number]: string;
 }
@@ -88,36 +87,36 @@ class MockDynamoDB {
                         });
                     } else {
                         let tableNames = Object.keys(params.RequestItems);
+                        let firstTableName = tableNames[0];
+                        let numPutItemSucceeded = 0;
                         let response = {};
 
-                        if (this._isAllUnprocessedItems()) {
-                            // case: PutRequest failed for all items
-                            response['UnprocessedItems'] = params.RequestItems;
-                        } else if (this._isSomeUnprocessedItems()) {
+                        if (this._isSomeUnprocessedItems()) {
                             // case: PutRequest succeeded for 1st item, failed for all the others
-                            let tableName = Object.keys(params.RequestItems)[0];
+                            numPutItemSucceeded = 1;
                             response['UnprocessedItems'] = params.RequestItems;
-                            response['UnprocessedItems'][tableName] = response['UnprocessedItems'][tableName].slice(1);
+                            response['UnprocessedItems'][firstTableName] = response['UnprocessedItems'][firstTableName].slice(1);
                         } else {
                             // case: PutRequest succeeded for all items
+                            numPutItemSucceeded = params.RequestItems[firstTableName].length;
                         }
 
                         if (params.ReturnConsumedCapacity === 'INDEXES') {
                             response['ConsumedCapacity'] = [
                                 {
-                                    CapacityUnits: 7,
-                                    TableName: tableNames[0],
+                                    CapacityUnits: 6 * numPutItemSucceeded,
+                                    TableName: firstTableName,
                                     Table: {
-                                        CapacityUnits: 2
+                                        CapacityUnits: numPutItemSucceeded
                                     },
                                     LocalSecondaryIndexes: {
                                         MyLocalIndex: {
-                                            CapacityUnits: 4
+                                            CapacityUnits: 3 * numPutItemSucceeded
                                         }
                                     },
                                     GlobalSecondaryIndexes: {
                                         MyGlobalIndex: {
-                                            CapacityUnits: 1
+                                            CapacityUnits: 2 * numPutItemSucceeded
                                         }
                                     }
                                 }
@@ -125,8 +124,8 @@ class MockDynamoDB {
                         } else if (params.ReturnConsumedCapacity === 'TOTAL') {
                             response['ConsumedCapacity'] = [
                                 {
-                                    CapacityUnits: 7,
-                                    TableName: tableNames[0]
+                                    CapacityUnits: 6 * numPutItemSucceeded,
+                                    TableName: firstTableName
                                 }
                             ];
                         }
@@ -205,10 +204,6 @@ class MockDynamoDB {
 
     private _isSomeUnprocessedItems() {
         return this._customResponses[this._countRequests] === 'SomeUnprocessedItems';
-    }
-
-    private _isAllUnprocessedItems() {
-        return this._customResponses[this._countRequests] === 'AllUnprocessedItems';
     }
 
     private _isAllValidationException() {
@@ -468,9 +463,7 @@ describe('lib/dynamodb-wrapper', () => {
                 });
                 let dynamoDB = mock.dynamoDB;
                 let dynamoDBWrapper = mock.dynamoDBWrapper;
-                dynamoDBWrapper.retryDelayOptions.customBackoff = function (retryCount) {
-                    return 100 * retryCount;
-                };
+                dynamoDBWrapper.retryDelayOptions.customBackoff = () => 0;
 
                 spyOn(dynamoDB, 'putItem').and.callThrough();
 
@@ -827,7 +820,7 @@ describe('lib/dynamodb-wrapper', () => {
                 let params = _setupBatchWriteItemParams();
                 let mock = _setupDynamoDBWrapper({
                     customResponses: {
-                        1: 'AllUnprocessedItems'
+                        1: 'SomeUnprocessedItems'
                     }
                 });
                 let dynamoDB = mock.dynamoDB;
@@ -847,13 +840,13 @@ describe('lib/dynamodb-wrapper', () => {
             return test();
         }));
 
-        it('should return a 200 OK response if some items were processed, but others were not', testAsync(() => {
+        it('should return a 200 OK response if some items were unprocessed', testAsync(() => {
             async function test() {
                 let params = _setupBatchWriteItemParams();
                 let mock = _setupDynamoDBWrapper({
                     customResponses: {
-                        1: 'AllUnprocessedItems',
-                        2: 'AllUnprocessedItems',
+                        1: 'ProvisionedThroughputExceededException',
+                        2: 'ProvisionedThroughputExceededException',
                         3: 'SomeUnprocessedItems'
                     }
                 });
@@ -879,9 +872,9 @@ describe('lib/dynamodb-wrapper', () => {
                 let params = _setupBatchWriteItemParams();
                 let mock = _setupDynamoDBWrapper({
                     customResponses: {
-                        1: 'AllUnprocessedItems',
-                        2: 'AllUnprocessedItems',
-                        3: 'AllUnprocessedItems'
+                        1: 'ProvisionedThroughputExceededException',
+                        2: 'ProvisionedThroughputExceededException',
+                        3: 'ProvisionedThroughputExceededException'
                     }
                 });
                 let dynamoDB = mock.dynamoDB;
@@ -925,7 +918,7 @@ describe('lib/dynamodb-wrapper', () => {
                 expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(3);
                 expect(response.ConsumedCapacity).toEqual([
                     {
-                        CapacityUnits: 21,
+                        CapacityUnits: 60,
                         TableName: 'Test'
                     }
                 ]);
@@ -952,21 +945,52 @@ describe('lib/dynamodb-wrapper', () => {
                 expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(3);
                 expect(response.ConsumedCapacity).toEqual([
                     {
-                        CapacityUnits: 21,
+                        CapacityUnits: 60,
                         TableName: 'Test',
                         Table: {
-                            CapacityUnits: 6
+                            CapacityUnits: 10
                         },
                         LocalSecondaryIndexes: {
                             MyLocalIndex: {
-                                CapacityUnits: 12
+                                CapacityUnits: 30
                             }
                         },
                         GlobalSecondaryIndexes: {
                             MyGlobalIndex: {
-                                CapacityUnits: 3
+                                CapacityUnits: 20
                             }
                         }
+                    }
+                ]);
+
+            }
+
+            return test();
+        }));
+
+        it('should aggregate consumed capacity (TOTAL) when some requests are throttled', testAsync(() => {
+            async function test() {
+                let params = _setupBatchWriteItemParams('TOTAL');
+                let mock = _setupDynamoDBWrapper({
+                    customResponses: {
+                        1: 'SomeUnprocessedItems'
+                    }
+                });
+                let dynamoDB = mock.dynamoDB;
+                let dynamoDBWrapper = mock.dynamoDBWrapper;
+
+                spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
+
+                let response = await dynamoDBWrapper.batchWriteItem(params, {
+                    partitionStrategy: 'EqualItemCount',
+                    targetItemCount: 10
+                });
+
+                expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(2);
+                expect(response.ConsumedCapacity).toEqual([
+                    {
+                        CapacityUnits: 60,
+                        TableName: 'Test'
                     }
                 ]);
 

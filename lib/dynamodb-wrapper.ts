@@ -238,7 +238,7 @@ export class DynamoDBWrapper {
         let responses = [];
         let shouldRetry, result, error;
 
-        do {
+        while (true) {
             shouldRetry = false;
             result = null;
 
@@ -263,8 +263,7 @@ export class DynamoDBWrapper {
                 }
             }
 
-            if (shouldRetry) {
-                retryCount++;
+            if (shouldRetry && ++retryCount <= this.maxRetries) {
                 let waitMs = this._backoffFunction(retryCount);
                 let tableName = removePrefix(this.tableNamePrefix, _extractTableNameFromRequest(params));
                 this.events.emit('retry', {
@@ -274,20 +273,21 @@ export class DynamoDBWrapper {
                     retryDelayMs: waitMs
                 });
                 await this._wait(waitMs);
+            } else {
+                break;
             }
+        }
 
-        } while (shouldRetry && retryCount <= this.maxRetries);
+        if (method === 'batchWriteItem') {
+            result = {};
+            _aggregateConsumedCapacityMultipleFromResponses(responses, result);
+        }
 
         if (retryCount > this.maxRetries) {
-            // BatchWriteItem always returns UnprocessedItems, allowing the upstream method
-            // to aggregate them and decide what to do
             if (method === 'batchWriteItem') {
-                // 1. aggregate data from successful responses
-                result = {};
-                _aggregateConsumedCapacityMultipleFromResponses(responses, result);
-
-                // 2. set UnprocessedItems equal to the UnprocessedItems from the last response
-                // in the successfulResponses array, or params.RequestItems if there were no successful responses
+                // instead of throwing an error, always return UnprocessedItems and delete decision upstream
+                // set UnprocessedItems equal to the UnprocessedItems from the last response
+                // in the array, or use params.RequestItems if there were no successful responses
                 result.UnprocessedItems = responses.length > 0
                     ? responses[responses.length - 1].UnprocessedItems
                     : params.RequestItems;
@@ -303,7 +303,7 @@ export class DynamoDBWrapper {
         if (this.retryDelayOptions.customBackoff) {
             return this.retryDelayOptions.customBackoff(retryCount);
         } else {
-            return this.retryDelayOptions.base * Math.pow(2, retryCount);
+            return this.retryDelayOptions.base * Math.pow(2, retryCount - 1);
         }
     }
 

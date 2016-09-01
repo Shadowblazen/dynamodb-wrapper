@@ -66,12 +66,6 @@ dynamoDBWrapper.events.on('retry', function (e) {
 });
 
 // An API call to DynamoDB.batchWriteItem() acting on table MyTable
-// was throttled. Retry attempt #1 will occur after a delay of 200ms.
-
-// An API call to DynamoDB.batchWriteItem() acting on table MyTable
-// was throttled. Retry attempt #2 will occur after a delay of 400ms.
-
-// An API call to DynamoDB.batchWriteItem() acting on table MyTable
 // was throttled. Retry attempt #3 will occur after a delay of 800ms.
 ```
 
@@ -114,7 +108,7 @@ var sampleQueryParams = {
 
 // fetches all pages of data from DynamoDB
 // promise resolves with the aggregation of all pages,
-// or rejects immediately if an error occurrs
+// or rejects immediately if an error occurs
 
 dynamoDBWrapper.query(sampleQueryParams)
     .then(function (response) {
