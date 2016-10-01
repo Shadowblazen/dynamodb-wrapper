@@ -17,7 +17,7 @@
 - **Enhanced AWS SDK:** Public interface closely resembles the AWS SDK, making it easier to learn and use.
 - **Bulk I/O:** Easily read, write or delete entire collections of items in DynamoDB with a single API call.
 - **Events:** Add event hooks to be notified of important events, such as whenever read/write capacity is consumed, or requests are retried due to throttling.
-- **Table prefixes:** DynamoDBWrapper can add a table name prefix in requests and remove it in responses. This is helpful if you have multiple environments within the same AWS Account.
+- **Table prefixes:** DynamoDBWrapper can add a table name prefix in requests and remove it in responses. This is helpful if you have multiple environments within the same AWS Account and region.
 
 ## Installing
 
@@ -173,7 +173,7 @@ dynamoDBWrapper.batchWriteItem(sampleParams, {
 
 The `DynamoDBWrapper` constructor accepts an optional configuration object with the following properties:
 - `tableNamePrefix` (string) - A prefix to add to all requests and remove from all responses.
-- `groupDelayMs` (number) - The delay (in millseconds) between individual requests made `query()`, `scan()`, and `batchWriteItem()`. Defaults to 100 ms.
+- `groupDelayMs` (number) - The delay (in millseconds) between individual requests made by `query()`, `scan()`, and `batchWriteItem()`. Defaults to 100 ms.
 - `maxRetries` (number) - The maximum amount of retries to attempt with a request. Note: this property is identical to the one described in [the AWS documentation](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/DynamoDB.html#constructor-property).
 - `retryDelayOptions` (object) - A set of options to configure the retry delay on retryable errors. Note: this property is identical to the one described in [the AWS documentation](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/DynamoDB.html#constructor-property). Currently supported options are:
     - `base` (number) - The base number of milliseconds to use in the exponential backoff for operation retries. Defaults to 100 ms.
@@ -183,10 +183,21 @@ The `DynamoDBWrapper` constructor accepts an optional configuration object with 
 
 The `DynamoDBWrapper` class supports a Promise-based API with the following methods. These are wrappers around the AWS SDK method of the same name. Please refer to the AWS [API documentation](http://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_Operations.html) and [JavaScript SDK documentation](http://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/DynamoDB.html) for more details:
 
-- `getItem(params)` - Gets a single item from DynamoDB
-- `updateItem(params)` - Updates a single item in DynamoDB
-- `putItem(params)` - Puts a single item into DynamoDB
-- `deleteItem(params)` - Deletes a single item from DynammoDB
+The following methods are passed straight through to the AWS JavaScript SDK:
+
+- `createTable(params)`
+- `updateTable(params)`
+- `describeTable(params)`
+- `deleteTable(params)`
+- `getItem(params)`
+- `updateItem(params)`
+- `putItem(params)`
+- `deleteItem(params)`
+
+## Enhanced API methods
+
+The following API methods have enhanced behavior to support bulk I/O:
+
 - `query(params, options)` - Fetches all pages of data from a DynamoDB query, making multiple requests and aggregating responses when necessary.
     - `options.groupDelayMs` (number) - the delay between individual requests. Overrides the configuration property of the same name in the constructor. Defaults to 100 ms.
 - `scan(params, options)` - Fetches all pages of data from a DynamoDB scan, making multiple requests and aggregating responses when necessary.

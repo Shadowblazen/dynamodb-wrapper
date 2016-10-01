@@ -42,18 +42,18 @@
     "node": ">=4.5.0"
   },
   "devDependencies": {
-    "coveralls": "^2.11.12",
+    "coveralls": "^2.11.14",
     "del": "^2.2.2",
     "gulp": "^3.9.1",
     "gulp-istanbul": "^1.1.1",
-    "gulp-tslint": "^6.1.1",
-    "gulp-typescript": "^2.13.6",
-    "jasmine": "^2.4.1",
+    "gulp-tslint": "^6.1.2",
+    "gulp-typescript": "^3.0.1",
+    "jasmine": "^2.5.2",
     "jasmine-console-reporter": "^1.2.7",
     "run-sequence": "^1.2.2",
     "through2": "^2.0.1",
     "tslint": "^3.15.1",
-    "typescript": "^1.8.10"
+    "typescript": "^2.0.3"
   },
   "peerDependencies": {
     "aws-sdk": "2.x"

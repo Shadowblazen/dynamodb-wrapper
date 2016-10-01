@@ -33,6 +33,54 @@ export class DynamoDBWrapper {
     }
 
     /**
+     * A lightweight wrapper around the DynamoDB CreateTable method.
+     *
+     * @param params
+     * @returns {Promise}
+     */
+
+    public async createTable(params: DynamoDB.CreateTableInput): Promise<DynamoDB.CreateTableOutput> {
+        addTablePrefixToRequest(this.tableNamePrefix, params);
+        return await this._callDynamoDB('createTable', params);
+    }
+
+    /**
+     * A lightweight wrapper around the DynamoDB UpdateTable method.
+     *
+     * @param params
+     * @returns {Promise}
+     */
+
+    public async updateTable(params: DynamoDB.UpdateTableInput): Promise<DynamoDB.UpdateTableOutput> {
+        addTablePrefixToRequest(this.tableNamePrefix, params);
+        return await this._callDynamoDB('updateTable', params);
+    }
+
+    /**
+     * A lightweight wrapper around the DynamoDB DescribeTable method.
+     *
+     * @param params
+     * @returns {Promise}
+     */
+
+    public async describeTable(params: DynamoDB.DescribeTableInput): Promise<DynamoDB.DescribeTableOutput> {
+        addTablePrefixToRequest(this.tableNamePrefix, params);
+        return await this._callDynamoDB('describeTable', params);
+    }
+
+    /**
+     * A lightweight wrapper around the DynamoDB DeleteTable method.
+     *
+     * @param params
+     * @returns {Promise}
+     */
+
+    public async deleteTable(params: DynamoDB.DeleteTableInput): Promise<DynamoDB.DeleteTableOutput> {
+        addTablePrefixToRequest(this.tableNamePrefix, params);
+        return await this._callDynamoDB('deleteTable', params);
+    }
+
+    /**
      * A lightweight wrapper around the DynamoDB GetItem method.
      *
      * @param params
@@ -319,19 +367,11 @@ export class DynamoDBWrapper {
         if (response.ConsumedCapacity) {
             let capacityType = _getMethodCapacityUnitsType(method);
             if (capacityType) {
-                if (Array.isArray(response.ConsumedCapacity)) {
-                    this.events.emit('consumedCapacity', {
-                        method: method,
-                        capacityType: capacityType,
-                        consumedCapacity: response.ConsumedCapacity
-                    });
-                } else {
-                    this.events.emit('consumedCapacity', {
-                        method: method,
-                        capacityType: capacityType,
-                        consumedCapacity: response.ConsumedCapacity
-                    });
-                }
+                this.events.emit('consumedCapacity', {
+                    method: method,
+                    capacityType: capacityType,
+                    consumedCapacity: response.ConsumedCapacity
+                });
             }
         }
     }
@@ -342,7 +382,7 @@ function _extractTableNameFromRequest(params: any): string {
     return params.RequestItems ? Object.keys(params.RequestItems)[0] : params.TableName;
 }
 
-function _getMethodCapacityUnitsType(method: string) {
+function _getMethodCapacityUnitsType(method: string): string {
     /* tslint:disable:switch-default */
     switch (method) {
         case 'getItem':

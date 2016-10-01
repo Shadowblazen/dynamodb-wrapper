@@ -27,6 +27,22 @@ class MockDynamoDB {
         this._countRequests = 0;
     }
 
+    public createTable() {
+        return this._mockApiResult();
+    }
+
+    public updateTable() {
+        return this._mockApiResult();
+    }
+
+    public describeTable() {
+        return this._mockApiResult();
+    }
+
+    public deleteTable() {
+        return this._mockApiResult();
+    }
+
     public getItem() {
         return this._mockApiResult();
     }
@@ -58,7 +74,10 @@ class MockDynamoDB {
                     } else {
                         // case: put item successful
                         resolve({
-                            ConsumedCapacity: { CapacityUnits: 1 }
+                            ConsumedCapacity: {
+                                TableName: params.TableName,
+                                CapacityUnits: 1
+                            }
                         });
                     }
                 });
@@ -279,64 +298,35 @@ describe('lib/dynamodb-wrapper', () => {
         expect(dynamoDBWrapper.retryDelayOptions.customBackoff).toBeDefined();
     });
 
-    describe('getItem()', () => {
-
-        it('should get item', testAsync(() => {
+    [
+        'createTable',
+        'updateTable',
+        'describeTable',
+        'deleteTable',
+        'getItem',
+        'putItem',
+        'updateItem',
+        'deleteItem'
+    ].forEach(method => {
+        it('should pass ' + method + '() calls straight through to the AWS SDK', testAsync(() => {
             async function test() {
-                let params: any = {};
+                let params: any = {
+                    TableName: 'Test'
+                };
                 let mock = _setupDynamoDBWrapper();
                 let dynamoDB = mock.dynamoDB;
                 let dynamoDBWrapper = mock.dynamoDBWrapper;
+                dynamoDBWrapper.tableNamePrefix = 'local-';
 
-                spyOn(dynamoDB, 'getItem').and.callThrough();
-                await dynamoDBWrapper.getItem(params);
+                spyOn(dynamoDB, method).and.callThrough();
+                await dynamoDBWrapper[method](params);
 
-                expect(dynamoDB.getItem).toHaveBeenCalledWith(params);
+                expect(params.TableName).toBe('local-Test');
+                expect(dynamoDB[method]).toHaveBeenCalledWith(params);
             }
 
             return test();
         }));
-
-    });
-
-    describe('updateItem()', () => {
-
-        it('should update item', testAsync(() => {
-            async function test() {
-                let params: any = {};
-                let mock = _setupDynamoDBWrapper();
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
-
-                spyOn(dynamoDB, 'updateItem').and.callThrough();
-                await dynamoDBWrapper.updateItem(params);
-
-                expect(dynamoDB.updateItem).toHaveBeenCalledWith(params);
-            }
-
-            return test();
-        }));
-
-    });
-
-    describe('deleteItem()', () => {
-
-        it('should delete item', testAsync(() => {
-            async function test() {
-                let params: any = {};
-                let mock = _setupDynamoDBWrapper();
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
-
-                spyOn(dynamoDB, 'deleteItem').and.callThrough();
-                await dynamoDBWrapper.deleteItem(params);
-
-                expect(dynamoDB.deleteItem).toHaveBeenCalledWith(params);
-            }
-
-            return test();
-        }));
-
     });
 
     describe('putItem()', () => {
@@ -393,6 +383,7 @@ describe('lib/dynamodb-wrapper', () => {
                     method: 'putItem',
                     capacityType: 'WriteCapacityUnits',
                     consumedCapacity: {
+                        TableName: 'Test',
                         CapacityUnits: 1
                     }
                 });

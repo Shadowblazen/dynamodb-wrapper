@@ -3,7 +3,6 @@ var del = require('del');
 var gulp = require('gulp');
 var tslint = require('gulp-tslint');
 var tsc = require('gulp-typescript');
-var typescript = require('typescript');
 var runSequence = require('run-sequence');
 var istanbul = require('gulp-istanbul');
 
@@ -51,10 +50,10 @@ gulp.task('build', function (done) {
 });
 
 gulp.task('transpile', function () {
-    var tsProject = tsc.createProject('tsconfig.json', { typescript: typescript });
+    var tsProject = tsc.createProject('tsconfig.json');
 
     return gulp.src('lib/**/*.ts')
-        .pipe(tsc(tsProject))
+        .pipe(tsProject())
         .pipe(gulp.dest('bin'));
 });
 
@@ -101,23 +100,27 @@ gulp.task('posttest.coverage.reports', function () {
 });
 
 gulp.task('lint.noerror', function () {
-    return gulp.src('lib/**/*.ts')
-        .pipe(tslint({
-            formatter: 'verbose'
-        }))
-        .pipe(tslint.report({
-            emitError: false
-        }));
+    return tslintHelper('lib/**/*.ts', false);
 });
 
 gulp.task('lint', function () {
-    return gulp.src('lib/**/*.ts')
-        .pipe(tslint({
-            formatter: 'verbose'
-        }))
-        .pipe(tslint.report());
+    return tslintHelper('lib/**/*.ts', true);
 });
 
 gulp.task('watch.lib', function () {
     gulp.watch(['lib/**/*.ts'], ['build', 'lint.noerror']);
 });
+
+/*********************************************************************************************************************
+ * Helper methods
+ *********************************************************************************************************************/
+
+function tslintHelper(glob, emitError) {
+    return gulp.src(glob)
+        .pipe(tslint({
+            formatter: 'verbose'
+        }))
+        .pipe(tslint.report({
+            emitError: emitError
+        }));
+}
