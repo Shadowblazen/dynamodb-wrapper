@@ -6,12 +6,16 @@ declare module "dynamodb-wrapper" {
 
     export class DynamoDBWrapper {
         constructor(dynamoDB: any, options?: DynamoDBWrapper.IDynamoDBWrapperOptions);
+        createTable(params: DynamoDBWrapper.CreateTableInput): Promise<DynamoDBWrapper.CreateTableOutput>;
+        updateTable(params: DynamoDBWrapper.UpdateTableInput): Promise<DynamoDBWrapper.UpdateTableOutput>;
+        describeTable(params: DynamoDBWrapper.DescribeTableInput): Promise<DynamoDBWrapper.DescribeTableOutput>;
+        deleteTable(params: DynamoDBWrapper.DeleteTableInput): Promise<DynamoDBWrapper.DeleteTableOutput>;
         getItem(params: DynamoDBWrapper.GetItemInput): Promise<DynamoDBWrapper.GetItemOutput>;
         updateItem(params: DynamoDBWrapper.UpdateItemInput): Promise<DynamoDBWrapper.UpdateItemOutput>;
         putItem(params: DynamoDBWrapper.PutItemInput): Promise<DynamoDBWrapper.PutItemOutput>;
         deleteItem(params: DynamoDBWrapper.DeleteItemInput): Promise<DynamoDBWrapper.DeleteItemOutput>;
-        query(params: DynamoDBWrapper.QueryInput): Promise<DynamoDBWrapper.QueryOutput>;
-        scan(params: DynamoDBWrapper.ScanInput): Promise<DynamoDBWrapper.ScanOutput>;
+        query(params: DynamoDBWrapper.QueryInput, options?: DynamoDBWrapper.IQueryOptions): Promise<DynamoDBWrapper.QueryOutput>;
+        scan(params: DynamoDBWrapper.ScanInput, options?: DynamoDBWrapper.IScanOptions): Promise<DynamoDBWrapper.ScanOutput>;
         batchWriteItem(params: DynamoDBWrapper.BatchWriteItemInput, options?: DynamoDBWrapper.IBatchWriteItemOptions): Promise<DynamoDBWrapper.BatchWriteItemOutput>;
     }
 
@@ -58,7 +62,7 @@ declare module "dynamodb-wrapper" {
         }
 
         // ------------------------------------------------------------------------
-        // Copy/pasted from aws-dynamodb.d.ts
+        // Copy/pasted from aws-sdk typings (aws-dynamodb.d.ts)
         // ------------------------------------------------------------------------
 
         export type AttributeAction = string;
