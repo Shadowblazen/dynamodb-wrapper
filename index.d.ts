@@ -4,7 +4,7 @@ declare module "dynamodb-wrapper" {
     // DynamoDBWrapper public API
     // ------------------------------------------------------------------------
 
-    export class DynamoDBWrapper {
+    class DynamoDBWrapper {
         constructor(dynamoDB: any, options?: DynamoDBWrapper.IDynamoDBWrapperOptions);
         createTable(params: DynamoDBWrapper.CreateTableInput): Promise<DynamoDBWrapper.CreateTableOutput>;
         updateTable(params: DynamoDBWrapper.UpdateTableInput): Promise<DynamoDBWrapper.UpdateTableOutput>;
@@ -19,7 +19,7 @@ declare module "dynamodb-wrapper" {
         batchWriteItem(params: DynamoDBWrapper.BatchWriteItemInput, options?: DynamoDBWrapper.IBatchWriteItemOptions): Promise<DynamoDBWrapper.BatchWriteItemOutput>;
     }
 
-    export module DynamoDBWrapper {
+    module DynamoDBWrapper {
 
         export interface IDynamoDBWrapperOptions {
 
@@ -498,4 +498,6 @@ declare module "dynamodb-wrapper" {
         }
 
     }
+
+    export = DynamoDBWrapper;
 }

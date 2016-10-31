@@ -1,5 +1,9 @@
 # dynamodb-wrapper changelog
 
+## 1.2.1, 1.2.2
+
+- updated typescript typings for the public API
+
 ## 1.2.0
 
 - added support for `createTable`, `updateTable`, `describeTable` and `deleteTable` methods
