@@ -1,5 +1,10 @@
 # dynamodb-wrapper changelog
 
+## 1.2.3
+
+- fixed a bug where a table prefix could be prepended multiple times
+- added retries for LimitExceededException
+
 ## 1.2.1, 1.2.2
 
 - updated typescript typings for the public API

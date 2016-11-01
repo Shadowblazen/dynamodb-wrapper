@@ -167,6 +167,63 @@ dynamoDBWrapper.batchWriteItem(sampleParams, {
     });
 ```
 
+### Example: Table Prefixes
+
+You may wish to work with duplicate copies of the same set of tables. For example: "dev-MyTable" and "stg-MyTable" if you have dev and stage environments under the same AWS account. DynamoDBWrapper supports this use-case via a configuration-driven `tableNamePrefix` option.
+
+```js
+// load this "environment" variable from a config file
+// so it will have different values per environment
+// we'll just use dev for this example
+
+var environment = 'dev-';
+
+// Configure DynamoDBWrapper with the environment-specific prefix
+// Note: we only do this here in one place; there's no need to
+// sprinkle the prefix throughout your codebase.
+
+var AWS = require('aws-sdk');
+var DynamoDBWrapper = require('dynamodb-wrapper');
+var dynamoDB = new AWS.DynamoDB();
+var dynamoDBWrapper = new DynamoDBWrapper(dynamoDB, {
+    tableNamePrefix: environment
+});
+
+// Create the table like usual...
+
+dynamoDBWrapper.createTable({
+    TableName: 'MyTable',
+    // more params...
+});
+
+// The new table will be named "dev-MyTable" instead of "MyTable"
+// This works with all the other API methods too.
+
+var promise = dynamoDBWrapper.getItem({
+    TableName: 'MyTable',
+    ReturnConsumedCapacity: 'TOTAL',
+    // more params...
+});
+
+// Although the real table name in AWS DynamoDB is "dev-MyTable",
+// the prefix will be stripped from the response for transparency:
+
+promise.then(function (response) {
+    console.log(response);
+});
+
+// {
+//   ConsumedCapacity: {
+//     TableName: 'MyTable', // <-- no prefix in the response
+//     CapacityUnits: 1
+//   },
+//   Item: { ... }
+// }
+
+// In summary: the prefix is prepended to all requests
+// and stripped from all responses
+```
+
 ## Configuration
 
 *This section is copied from the `IDynamoDBWrapperOptions` interface in the `index.d.ts` file.*
