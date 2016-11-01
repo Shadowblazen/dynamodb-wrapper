@@ -304,7 +304,9 @@ export class DynamoDBWrapper {
             } catch (e) {
                 error = e;
                 if (e.code === ErrorCode.ProvisionedThroughputExceededException ||
-                        e.code === ErrorCode.ThrottlingException || e.statusCode === 500 || e.statusCode === 503) {
+                        e.code === ErrorCode.ThrottlingException ||
+                        e.code === ErrorCode.LimitExceededException ||
+                        e.statusCode === 500 || e.statusCode === 503) {
                     shouldRetry = true;
                 } else {
                     throw e;

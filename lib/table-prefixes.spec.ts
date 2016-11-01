@@ -17,6 +17,17 @@ describe('lib/table-prefixes', () => {
             expect(params.TableName).toBe('dev-MyTable');
         });
 
+        it('should NOT insert table prefix if TableName already begins with the prefix', () => {
+            let params = {
+                TableName: 'dev-MyTable'
+            };
+
+            addTablePrefixToRequest('dev-', params);
+
+            expect(params.TableName).toBe('dev-MyTable');
+            expect(params.TableName).not.toBe('dev-dev-MyTable');
+        });
+
         it('should insert table prefix in RequestItems (used in BatchGetItem, BatchWriteItem)', () => {
             let params = {
                 RequestItems: {
@@ -31,6 +42,31 @@ describe('lib/table-prefixes', () => {
                 RequestItems: {
                     'dev-Table1': [],
                     'dev-Table2': []
+                }
+            });
+        });
+
+        it('should NOT insert table prefix in RequestItems if the table name already begins with the prefix', () => {
+            let params = {
+                RequestItems: {
+                    'dev-Table1': [],
+                    'dev-Table2': []
+                }
+            };
+
+            addTablePrefixToRequest('dev-', params);
+
+            expect(params).toEqual({
+                RequestItems: {
+                    'dev-Table1': [],
+                    'dev-Table2': []
+                }
+            });
+
+            expect(params).not.toEqual({
+                RequestItems: {
+                    'dev-dev-Table1': [],
+                    'dev-dev-Table2': []
                 }
             });
         });

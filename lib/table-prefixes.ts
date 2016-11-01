@@ -71,5 +71,5 @@ function _addPrefixes(prefix: string, map: any): any {
 }
 
 function _addPrefix(prefix: string, tableName: string): string {
-    return prefix + tableName;
+    return tableName.indexOf(prefix) === 0 ? tableName : prefix + tableName;
 }

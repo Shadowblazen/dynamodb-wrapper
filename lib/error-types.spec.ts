@@ -9,6 +9,7 @@ describe('lib/error-types', () => {
     it('should define error codes', () => {
         expect(ErrorCode).toEqual({
             ProvisionedThroughputExceededException: 'ProvisionedThroughputExceededException',
+            LimitExceededException: 'LimitExceededException',
             ThrottlingException: 'ThrottlingException',
             NotYetImplementedError: 'NotYetImplementedError'
         });
@@ -18,6 +19,9 @@ describe('lib/error-types', () => {
         expect(ErrorMessage).toEqual({
             ProvisionedThroughputExceededException: 'The level of configured provisioned throughput for the table was exceeded.' +
             ' Consider increasing your provisioning level with the UpdateTable API',
+            LimitExceededException: 'The number of concurrent table requests (cumulative number of tables in the CREATING,' +
+            ' DELETING or UPDATING state) exceeds the maximum allowed of 10. Also, for tables with secondary indexes, only' +
+            ' one of those tables can be in the CREATING state at any point in time.',
             BatchWriteMultipleTables: 'Expected exactly 1 table name in RequestItems, but found 0 or 2+.' +
             ' Writing to more than 1 table with BatchWriteItem is supported in the AWS DynamoDB API,' +
             ' but this capability is not yet implemented by this wrapper library.',
