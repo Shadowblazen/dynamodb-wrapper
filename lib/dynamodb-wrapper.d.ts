@@ -38,4 +38,4 @@ declare type AttributeValue = {
     L?: any;
     NULL?: boolean;
     BOOL?: boolean;
-}
+};
