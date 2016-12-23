@@ -207,7 +207,7 @@ describe('lib/estimate-item-size', () => {
 
         expect(() => {
             estimateItemSize(item);
-        }).toThrow(new Error('NotImplementedException: DynamoDB Binary data type is not yet supported'));
+        }).toThrow(new Error('NotYetImplementedException: DynamoDB Binary data type is not yet supported'));
 
     });
 
@@ -221,7 +221,7 @@ describe('lib/estimate-item-size', () => {
 
         expect(() => {
             estimateItemSize(item);
-        }).toThrow(new Error('NotImplementedException: DynamoDB BinarySet data type is not yet supported'));
+        }).toThrow(new Error('NotYetImplementedException: DynamoDB BinarySet data type is not yet supported'));
 
     });
 

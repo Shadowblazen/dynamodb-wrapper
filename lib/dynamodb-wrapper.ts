@@ -23,10 +23,10 @@ export class DynamoDBWrapper {
         options = options || {};
         options.retryDelayOptions = options.retryDelayOptions || {};
         this.tableNamePrefix = typeof options.tableNamePrefix === 'string' ? options.tableNamePrefix : '';
-        this.groupDelayMs = _getNonNegativeInteger(options.groupDelayMs, 100);
-        this.maxRetries = _getNonNegativeInteger(options.maxRetries, 10);
+        this.groupDelayMs = _getNonNegativeInteger([options.groupDelayMs, 100]);
+        this.maxRetries = _getNonNegativeInteger([options.maxRetries, 10]);
         this.retryDelayOptions = {};
-        this.retryDelayOptions.base = _getNonNegativeInteger(options.retryDelayOptions.base, 100);
+        this.retryDelayOptions.base = _getNonNegativeInteger([options.retryDelayOptions.base, 100]);
         if (typeof options.retryDelayOptions.customBackoff === 'function') {
             this.retryDelayOptions.customBackoff = options.retryDelayOptions.customBackoff;
         }
@@ -145,7 +145,7 @@ export class DynamoDBWrapper {
 
         // set default options
         options = options || {};
-        options.groupDelayMs = _getNonNegativeInteger(options.groupDelayMs, this.groupDelayMs);
+        options.groupDelayMs = _getNonNegativeInteger([options.groupDelayMs, this.groupDelayMs]);
 
         let responses = await this._queryOrScanHelper('query', params, options.groupDelayMs);
         return _makeQueryOrScanResponse(responses);
@@ -168,7 +168,7 @@ export class DynamoDBWrapper {
 
         // set default options
         options = options || {};
-        options.groupDelayMs = _getNonNegativeInteger(options.groupDelayMs, this.groupDelayMs);
+        options.groupDelayMs = _getNonNegativeInteger([options.groupDelayMs, this.groupDelayMs]);
 
         let responses = await this._queryOrScanHelper('scan', params, options.groupDelayMs);
         return _makeQueryOrScanResponse(responses);
@@ -192,22 +192,30 @@ export class DynamoDBWrapper {
     public async batchWriteItem(params: DynamoDB.BatchWriteItemInput,
                                 options?: IBatchWriteItemOptions): Promise<DynamoDB.BatchWriteItemOutput> {
 
-        // set default options
-        options = options || {};
-        options.groupDelayMs = _getNonNegativeInteger(options.groupDelayMs, this.groupDelayMs);
-        options.targetGroupWCU = _getPositiveInteger(options.targetGroupWCU, 5);
-        options.targetItemCount = _getPositiveInteger(options.targetItemCount, 25);
-
-        // validate parameters to check for features not yet implemented
         _validateBatchWriteItemParams(params);
-
         addTablePrefixToRequest(this.tableNamePrefix, params);
 
-        const tableName = _extractTableNameFromRequest(params);
-        const totalRequestItems = params.RequestItems[tableName].length;
+        let tableNames = Object.keys(params.RequestItems);
+        let totalRequestItems = 0;
+        let promises = [];
+        options = options || {};
 
-        let responses = await this._batchWriteItemHelper(tableName, params, options);
-        return _makeBatchWriteItemResponse(tableName, totalRequestItems, responses);
+        for (let tableName of tableNames) {
+            // set default options (note: backwards compatibility, see DEPRECATED comment on IBatchWriteItemOptions)
+            let unprefixedTableName = removePrefix(this.tableNamePrefix, tableName);
+            let option: IBatchWriteItemOption = options[unprefixedTableName] || {};
+            option.partitionStrategy = option.partitionStrategy || options.partitionStrategy;
+            option.groupDelayMs = _getNonNegativeInteger([option.groupDelayMs, options.groupDelayMs, this.groupDelayMs]);
+            option.targetGroupWCU = _getPositiveInteger([option.targetGroupWCU, options.targetGroupWCU, 5]);
+            option.targetItemCount = _getPositiveInteger([option.targetItemCount, options.targetItemCount, 25]);
+
+            totalRequestItems += params.RequestItems[tableName].length;
+            promises.push(this._batchWriteItemHelper(tableName, params, option));
+        }
+
+        let responsesPerTable = await Promise.all(promises);
+
+        return _makeBatchWriteItemResponse(tableNames, responsesPerTable, totalRequestItems);
     }
 
     private async _queryOrScanHelper(method: string, params: any, groupDelayMs: number): Promise<any> {
@@ -229,7 +237,7 @@ export class DynamoDBWrapper {
     }
 
     private async _batchWriteItemHelper(tableName: string, params: DynamoDB.BatchWriteItemInput,
-                                        options: IBatchWriteItemOptions): Promise<DynamoDB.BatchWriteItemOutput[]> {
+                                        options: IBatchWriteItemOption): Promise<DynamoDB.BatchWriteItemOutput[]> {
 
         let list = [];
 
@@ -335,7 +343,7 @@ export class DynamoDBWrapper {
 
         if (retryCount > this.maxRetries) {
             if (method === 'batchWriteItem') {
-                // instead of throwing an error, always return UnprocessedItems and delete decision upstream
+                // instead of throwing an error, always return UnprocessedItems and defer decision upstream
                 // set UnprocessedItems equal to the UnprocessedItems from the last response
                 // in the array, or use params.RequestItems if there were no successful responses
                 result.UnprocessedItems = responses.length > 0
@@ -426,19 +434,33 @@ function _makeQueryOrScanResponse(responses: any): any {
     return result;
 }
 
-function _makeBatchWriteItemResponse(tableName: string, totalRequestItems: number,
-                                     responses: DynamoDB.BatchWriteItemOutput[]): DynamoDB.BatchWriteItemOutput {
+function _makeBatchWriteItemResponse(tableNames: string[], responsesPerTable: DynamoDB.BatchWriteItemOutput[][],
+                                     totalRequestItems: number): DynamoDB.BatchWriteItemOutput {
 
-    let totalUnprocessedItems = [];
+    let totalUnprocessedItems = 0;
+    let unprocessedItemsHash = {};
 
-    for (let res of responses) {
-        if (res.UnprocessedItems) {
-            _appendArray(totalUnprocessedItems, res.UnprocessedItems[tableName]);
+    for (let i = 0; i < tableNames.length; i++) {
+        let unprocessedItems = [];
+        let tableName = tableNames[i];
+        let responses = responsesPerTable[i];
+
+        // get a flat array of unprocessed items for this table
+        for (let res of responses) {
+            if (res.UnprocessedItems) {
+                _appendArray(unprocessedItems, res.UnprocessedItems[tableName]);
+            }
+        }
+
+        // if there are any unprocessed items for this table, add them to the hash
+        if (unprocessedItems.length > 0) {
+            unprocessedItemsHash[tableName] = unprocessedItems;
+            totalUnprocessedItems += unprocessedItems.length;
         }
     }
 
     // if all items are unprocessed, throw an error
-    if (totalUnprocessedItems.length === totalRequestItems) {
+    if (totalUnprocessedItems === totalRequestItems) {
         throw new Exception(
             ErrorCode.ProvisionedThroughputExceededException,
             ErrorMessage.ProvisionedThroughputExceededException
@@ -447,12 +469,15 @@ function _makeBatchWriteItemResponse(tableName: string, totalRequestItems: numbe
 
     // otherwise, construct a 200 OK response
     let result: any = {};
-
-    if (totalUnprocessedItems.length > 0) {
-        result.UnprocessedItems = {};
-        result.UnprocessedItems[tableName] = totalUnprocessedItems;
+    if (totalUnprocessedItems > 0) {
+        result.UnprocessedItems = unprocessedItemsHash;
     }
 
+    // aggregate consumed capacity for all tables
+    let responses = [];
+    for (let r of responsesPerTable) {
+        _appendArray(responses, r);
+    }
     _aggregateConsumedCapacityMultipleFromResponses(responses, result);
 
     return result;
@@ -562,29 +587,24 @@ function _validateBatchWriteItemParams(params: DynamoDB.BatchWriteItemInput): vo
             ErrorMessage.ItemCollectionMetrics
         );
     }
+}
 
-    // multiple table names not yet supported
-    let tableNames = Object.keys(params.RequestItems);
-    if (!tableNames || tableNames.length !== 1) {
-        throw new Exception(
-            ErrorCode.NotYetImplementedError,
-            ErrorMessage.BatchWriteMultipleTables
-        );
+function _getNonNegativeInteger(arr: any[]) {
+    arr.push(0);
+    for (let v of arr) {
+        if (typeof v === 'number' && !isNaN(v) && v < Number.MAX_SAFE_INTEGER && v >= 0 && Math.round(v) === v) {
+            return v;
+        }
     }
 }
 
-function _getNonNegativeInteger(v: any, defaultValue: number) {
-    if (typeof v !== 'number' || isNaN(v) || v >= Number.MAX_SAFE_INTEGER || v < 0 || Math.round(v) !== v) {
-        v = defaultValue;
+function _getPositiveInteger(arr: any[]) {
+    arr.push(1);
+    for (let v of arr) {
+        if (typeof v === 'number' && !isNaN(v) && v < Number.MAX_SAFE_INTEGER && v > 0 && Math.round(v) === v) {
+            return v;
+        }
     }
-    return v;
-}
-
-function _getPositiveInteger(v: any, defaultValue: number) {
-    if (typeof v !== 'number' || isNaN(v) || v >= Number.MAX_SAFE_INTEGER || v < 1 || Math.round(v) !== v) {
-        v = defaultValue;
-    }
-    return v;
 }
 
 function _appendArray(array1: any[], array2: any[]) {

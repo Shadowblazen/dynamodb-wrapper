@@ -1,5 +1,12 @@
 # dynamodb-wrapper changelog
 
+## 1.3.0
+
+- added a couple missing fields to `index.d.ts` for TypeScript consumers
+- enhancement: `batchWriteItem` now supports writing to multiple tables.
+    - There is an updated example in the README
+    - The format of the *options* object passed to `batchWriteItem` has changed, refer to `index.d.s` for details. (The previous format is still supported for backwards compatibility.)
+
 ## 1.2.3
 
 - fixed a bug where a table prefix could be prepended multiple times

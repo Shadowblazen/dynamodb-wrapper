@@ -52,7 +52,7 @@
     "jasmine-console-reporter": "^1.2.7",
     "run-sequence": "^1.2.2",
     "through2": "^2.0.3",
-    "tslint": "^4.1.1",
+    "tslint": "^4.2.0",
     "typescript": "^2.1.4"
   },
   "peerDependencies": {

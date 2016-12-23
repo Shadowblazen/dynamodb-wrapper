@@ -107,9 +107,9 @@ function estimateAttributeValueSize(value: AttributeValue, name?: string): numbe
             }
             break;
         case 'B':
-            throw new Error('NotImplementedException: DynamoDB Binary data type is not yet supported');
+            throw new Error('NotYetImplementedException: DynamoDB Binary data type is not yet supported');
         case 'BS':
-            throw new Error('NotImplementedException: DynamoDB BinarySet data type is not yet supported');
+            throw new Error('NotYetImplementedException: DynamoDB BinarySet data type is not yet supported');
         default:
             throw new Error('ValidationException: Invalid attributeKey "' + attributeKey + '"');
     }

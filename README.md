@@ -121,7 +121,7 @@ dynamoDBWrapper.query(sampleQueryParams)
 
 ### Example: Bulk Write/Delete
 
-Insert or delete large collections of items in a DynamoDB table with a single API call. DynamoDBWrapper batches your requests and aggregates the results into a single response. Use configuration values to fine tune throughput consumption for your use case.
+Insert or delete large collections of items in one or more DynamoDB tables with a single API call. DynamoDBWrapper batches your requests and aggregates the results into a single response. Use configuration values to fine tune throughput consumption for your use case.
 
 @see http://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_BatchWriteItem.html
 
@@ -145,6 +145,23 @@ var sampleParams = {
                 }
             },
             // this array can have thousands of items ...
+        ],
+        AnotherTable: [
+            {
+                PutRequest: {
+                    Item: {
+                        User: { S: 'Batman' }
+                    }
+                }
+            },
+            {
+                DeleteRequest: {
+                    Key: {
+                        User: { S: 'Superman' }
+                    }
+                }
+            },
+            // this array can have thousands of items ...
         ]
     }
 };
@@ -155,9 +172,24 @@ var sampleParams = {
 
 dynamoDBWrapper.batchWriteItem(sampleParams, {
     // use configuration to control and optimize throughput consumption
-    partitionStrategy: 'EvenlyDistributedGroupWCU',
-    targetGroupWCU: 50,
-    groupDelayMs: 1000
+
+    // write 10 items to AnotherTable every 500 milliseconds
+    // this strategy is best if you have known, consistent item sizes
+    MyTable: {
+        partitionStrategy: 'EqualItemCount',
+        targetItemCount: 10,
+        groupDelayMs: 500
+    }
+
+    // write up to 50 WCU of data to MyTable every 1000 milliseconds
+    // this strategy is best if you have unknown or variable item sizes,
+    // because it evenly distributes the items across requests so as
+    // to minimize throughput spikes (which can cause throttling)
+    AnotherTable: {
+        partitionStrategy: 'EvenlyDistributedGroupWCU',
+        targetGroupWCU: 50,
+        groupDelayMs: 1000
+    }
 })
     .then(function (response) {
         console.log(response);
@@ -259,13 +291,12 @@ The following API methods have enhanced behavior to support bulk I/O:
     - `options.groupDelayMs` (number) - the delay between individual requests. Overrides the configuration property of the same name in the constructor. Defaults to 100 ms.
 - `scan(params, options)` - Fetches all pages of data from a DynamoDB scan, making multiple requests and aggregating responses when necessary.
     - `options.groupDelayMs` (number) - the delay between individual requests. Overrides the configuration property of the same name in the constructor. Defaults to 100 ms.
-- `batchWriteItem(params, options)` - Writes or deletes large collections of items in a single DynamoDB table, batching items and making multiple requests when necessary.
-    - `options.groupDelayMs` (number) - the delay between individual requests. Overrides the configuration property of the same name in the constructor. Defaults to 100 ms.
-    - `options.partitionStrategy` (string) - strategy to use when partitioning the write requests array:
-        - `'EqualItemCount'` - creates groups with an equal number of items.
-        - `'EvenlyDistributedGroupWCU'` - creates groups with equalized total WCU, allowing for variable item counts.
-    - `options.targetItemCount` (number) - the number of items to put in each group when using the *EqualItemCount* partition strategy.
-    - `options.targetGroupWCU` (number) - the size threshold (in WriteCapacityUnits) of each group when using the *EvenlyDistributedGroupWCU* partition strategy.
+- `batchWriteItem(params, options)` - Writes or deletes large collections of items in multiple DynamoDB tables, batching items and making multiple requests when necessary.
+    - `options` is a mapping of table names to option hashes. Each option hash may have the following properties:
+        - `groupDelayMs` (number) - the delay between individual requests. Overrides the configuration property of the same name in the constructor. Defaults to 100 ms.
+        - `partitionStrategy` (string) - strategy to use when partitioning the write requests array. Possible values: *EqualItemCount* or *EvenlyDistributedGroupWCU*.
+        - `targetItemCount` (number) - the number of items to put in each group when using the *EqualItemCount* partition strategy.
+        - `targetGroupWCU` (number) - the size threshold (in WriteCapacityUnits) of each group when using the *EvenlyDistributedGroupWCU* partition strategy.
 
 ## Roadmap
 

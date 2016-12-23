@@ -6,6 +6,8 @@ declare module "dynamodb-wrapper" {
 
     class DynamoDBWrapper {
         constructor(dynamoDB: any, options?: DynamoDBWrapper.IDynamoDBWrapperOptions);
+        dynamoDB: any;
+        events: any;
         createTable(params: DynamoDBWrapper.CreateTableInput): Promise<DynamoDBWrapper.CreateTableOutput>;
         updateTable(params: DynamoDBWrapper.UpdateTableInput): Promise<DynamoDBWrapper.UpdateTableOutput>;
         describeTable(params: DynamoDBWrapper.DescribeTableInput): Promise<DynamoDBWrapper.DescribeTableOutput>;
@@ -47,6 +49,17 @@ declare module "dynamodb-wrapper" {
         }
 
         export interface IBatchWriteItemOptions {
+            [key: string]: IBatchWriteItemOption;
+
+            // DEPRECATED - moved to IBatchWriteItemOption
+            // still currently supported for backwards compatibility, but may be removed in the future
+            partitionStrategy?: 'EqualItemCount' | 'EvenlyDistributedGroupWCU';
+            targetItemCount?: number;
+            targetGroupWCU?: number;
+            groupDelayMs?: number;
+        }
+
+        export interface IBatchWriteItemOption {
             partitionStrategy?: 'EqualItemCount' | 'EvenlyDistributedGroupWCU';
             targetItemCount?: number;
             targetGroupWCU?: number;

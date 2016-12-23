@@ -693,7 +693,12 @@ describe('lib/dynamodb-wrapper', () => {
 
     describe('batchWriteItem()', () => {
 
-        function _setupBatchWriteItemParams(returnConsumedCapacity?: string): DynamoDB.BatchWriteItemInput {
+        interface ISetupOpts {
+            isMultipleTables?: boolean;
+            returnConsumedCapacity?: string;
+        }
+
+        function _setupBatchWriteItemParams(opts?: ISetupOpts): DynamoDB.BatchWriteItemInput {
             let params: any = {
                 RequestItems: {
                     Test: []
@@ -710,8 +715,21 @@ describe('lib/dynamodb-wrapper', () => {
                 });
             }
 
-            if (returnConsumedCapacity) {
-                params['ReturnConsumedCapacity'] = returnConsumedCapacity;
+            if (opts && opts.isMultipleTables) {
+                params.RequestItems['AnotherTest'] = [];
+                for (let i = 0; i < 4; i++) {
+                    params.RequestItems['AnotherTest'].push({
+                        PutRequest: {
+                            Item: {
+                                MyPartitionKey: { N: i.toString() }
+                            }
+                        }
+                    });
+                }
+            }
+
+            if (opts && opts.returnConsumedCapacity) {
+                params['ReturnConsumedCapacity'] = opts.returnConsumedCapacity;
             }
 
             return params;
@@ -740,33 +758,6 @@ describe('lib/dynamodb-wrapper', () => {
             return test();
         }));
 
-        it('should throw a NotYetImplemented exception for multiple table names', testAsync(() => {
-            async function test() {
-                let mock = _setupDynamoDBWrapper();
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
-                let params: any = {
-                    RequestItems: {
-                        Table1: [],
-                        Table2: []
-                    }
-                };
-
-                let exception;
-                try {
-                    await dynamoDBWrapper.batchWriteItem(params);
-                } catch (e) {
-                    exception = e;
-                }
-
-                expect(exception.code).toBe('NotYetImplementedError');
-                expect(exception.message).toBe('Expected exactly 1 table name in RequestItems, but found 0 or 2+. ' +
-                    'Writing to more than 1 table with BatchWriteItem is supported in the AWS DynamoDB API, ' +
-                    'but this capability is not yet implemented by this wrapper library.');
-            }
-
-            return test();
-        }));
-
         it('should batch write items with default options', testAsync(() => {
             async function test() {
                 let params = _setupBatchWriteItemParams();
@@ -785,7 +776,30 @@ describe('lib/dynamodb-wrapper', () => {
             return test();
         }));
 
-        it('should batch write items with custom options', testAsync(() => {
+        it('should batch write items with custom options per table', testAsync(() => {
+            async function test() {
+                let params = _setupBatchWriteItemParams();
+                let mock = _setupDynamoDBWrapper();
+                let dynamoDB = mock.dynamoDB;
+                let dynamoDBWrapper = mock.dynamoDBWrapper;
+
+                spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
+
+                await dynamoDBWrapper.batchWriteItem(params, {
+                    Test: {
+                        partitionStrategy: 'EvenlyDistributedGroupWCU',
+                        targetGroupWCU: 4
+                    }
+                });
+
+                expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(3);
+
+            }
+
+            return test();
+        }));
+
+        it('should batch write items with custom options (legacy for backwards compatibility)', testAsync(() => {
             async function test() {
                 let params = _setupBatchWriteItemParams();
                 let mock = _setupDynamoDBWrapper();
@@ -894,7 +908,9 @@ describe('lib/dynamodb-wrapper', () => {
 
         it('should aggregate consumed capacity (TOTAL) from multiple responses', testAsync(() => {
             async function test() {
-                let params = _setupBatchWriteItemParams('TOTAL');
+                let params = _setupBatchWriteItemParams({
+                    returnConsumedCapacity: 'TOTAL'
+                });
                 let mock = _setupDynamoDBWrapper();
                 let dynamoDB = mock.dynamoDB;
                 let dynamoDBWrapper = mock.dynamoDBWrapper;
@@ -902,8 +918,10 @@ describe('lib/dynamodb-wrapper', () => {
                 spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
 
                 let response = await dynamoDBWrapper.batchWriteItem(params, {
-                    partitionStrategy: 'EqualItemCount',
-                    targetItemCount: 4
+                    Test: {
+                        partitionStrategy: 'EqualItemCount',
+                        targetItemCount: 4
+                    }
                 });
 
                 expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(3);
@@ -921,7 +939,9 @@ describe('lib/dynamodb-wrapper', () => {
 
         it('should aggregate consumed capacity (INDEXES) from multiple responses', testAsync(() => {
             async function test() {
-                let params = _setupBatchWriteItemParams('INDEXES');
+                let params = _setupBatchWriteItemParams({
+                    returnConsumedCapacity: 'INDEXES'
+                });
                 let mock = _setupDynamoDBWrapper();
                 let dynamoDB = mock.dynamoDB;
                 let dynamoDBWrapper = mock.dynamoDBWrapper;
@@ -929,8 +949,10 @@ describe('lib/dynamodb-wrapper', () => {
                 spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
 
                 let response = await dynamoDBWrapper.batchWriteItem(params, {
-                    partitionStrategy: 'EqualItemCount',
-                    targetItemCount: 4
+                    Test: {
+                        partitionStrategy: 'EqualItemCount',
+                        targetItemCount: 4
+                    }
                 });
 
                 expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(3);
@@ -961,7 +983,9 @@ describe('lib/dynamodb-wrapper', () => {
 
         it('should aggregate consumed capacity (TOTAL) when some requests are throttled', testAsync(() => {
             async function test() {
-                let params = _setupBatchWriteItemParams('TOTAL');
+                let params = _setupBatchWriteItemParams({
+                    returnConsumedCapacity: 'TOTAL'
+                });
                 let mock = _setupDynamoDBWrapper({
                     customResponses: {
                         1: 'SomeUnprocessedItems'
@@ -982,6 +1006,72 @@ describe('lib/dynamodb-wrapper', () => {
                     {
                         CapacityUnits: 60,
                         TableName: 'Test'
+                    }
+                ]);
+
+            }
+
+            return test();
+        }));
+
+        it('should support batch writing to multiple tables', testAsync(() => {
+            async function test() {
+                let params = _setupBatchWriteItemParams({
+                    isMultipleTables: true,
+                    returnConsumedCapacity: 'INDEXES'
+                });
+                let mock = _setupDynamoDBWrapper();
+                let dynamoDB = mock.dynamoDB;
+                let dynamoDBWrapper = mock.dynamoDBWrapper;
+
+                spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
+
+                let response = await dynamoDBWrapper.batchWriteItem(params, {
+                    Test: {
+                        partitionStrategy: 'EqualItemCount',
+                        targetItemCount: 6
+                    },
+                    AnotherTest: {
+                        partitionStrategy: 'EqualItemCount',
+                        targetItemCount: 1
+                    }
+                });
+
+                expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(2 + 4);
+                expect(response.ConsumedCapacity).toEqual([
+                    {
+                        CapacityUnits: 60,
+                        TableName: 'Test',
+                        Table: {
+                            CapacityUnits: 10
+                        },
+                        LocalSecondaryIndexes: {
+                            MyLocalIndex: {
+                                CapacityUnits: 30
+                            }
+                        },
+                        GlobalSecondaryIndexes: {
+                            MyGlobalIndex: {
+                                CapacityUnits: 20
+                            }
+                        }
+                    },
+                    {
+                        CapacityUnits: 24,
+                        TableName: 'AnotherTest',
+                        Table: {
+                            CapacityUnits: 4
+                        },
+                        LocalSecondaryIndexes: {
+                            MyLocalIndex: {
+                                CapacityUnits: 12
+                            }
+                        },
+                        GlobalSecondaryIndexes: {
+                            MyGlobalIndex: {
+                                CapacityUnits: 8
+                            }
+                        }
                     }
                 ]);
 
