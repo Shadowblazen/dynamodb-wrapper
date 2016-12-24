@@ -55,6 +55,10 @@ class MockDynamoDB {
         return this._mockApiResult();
     }
 
+    public batchGetItem() {
+        return this._mockApiResult();
+    }
+
     public putItem(params: DynamoDB.PutItemInput) {
         return {
             promise: () => {
@@ -306,7 +310,8 @@ describe('lib/dynamodb-wrapper', () => {
         'getItem',
         'putItem',
         'updateItem',
-        'deleteItem'
+        'deleteItem',
+        'batchGetItem'
     ].forEach(method => {
         it('should pass ' + method + '() calls straight through to the AWS SDK', testAsync(() => {
             async function test() {

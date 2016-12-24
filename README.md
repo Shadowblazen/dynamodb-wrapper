@@ -173,7 +173,7 @@ var sampleParams = {
 dynamoDBWrapper.batchWriteItem(sampleParams, {
     // use configuration to control and optimize throughput consumption
 
-    // write 10 items to AnotherTable every 500 milliseconds
+    // write 10 items to MyTable every 500 milliseconds
     // this strategy is best if you have known, consistent item sizes
     MyTable: {
         partitionStrategy: 'EqualItemCount',
@@ -181,7 +181,7 @@ dynamoDBWrapper.batchWriteItem(sampleParams, {
         groupDelayMs: 500
     }
 
-    // write up to 50 WCU of data to MyTable every 1000 milliseconds
+    // write up to 50 WCU of data to AnotherTable every 1000 milliseconds
     // this strategy is best if you have unknown or variable item sizes,
     // because it evenly distributes the items across requests so as
     // to minimize throughput spikes (which can cause throttling)
@@ -300,5 +300,4 @@ The following API methods have enhanced behavior to support bulk I/O:
 
 ## Roadmap
 
-- **BatchGetItem:** Add support for `BatchGetItem` as part of the "Bulk Read" feature set.
 - **Streams:** Add method signatures that return Streams (instead of Promises), allowing for better integration ecosystems such as gulp

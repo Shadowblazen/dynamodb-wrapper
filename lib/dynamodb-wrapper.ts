@@ -129,6 +129,18 @@ export class DynamoDBWrapper {
     }
 
     /**
+     * A lightweight wrapper around the DynamoDB BatchGetItem method.
+     *
+     * @param params
+     * @returns {Promise}
+     */
+
+    public async batchGetItem(params: DynamoDB.BatchGetItemInput): Promise<DynamoDB.BatchGetItemOutput> {
+        addTablePrefixToRequest(this.tableNamePrefix, params);
+        return await this._callDynamoDB('batchGetItem', params);
+    }
+
+    /**
      * A lightweight wrapper around the DynamoDB Query method.
      *
      * The underlying DynamoDB Query method always returns 1 page of data per call. This method will return all pages
