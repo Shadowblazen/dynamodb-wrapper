@@ -6,6 +6,7 @@ import { DynamoDB } from 'aws-sdk';
 import { ErrorCode, ErrorMessage, Exception } from './error-types';
 import { getNextGroupByItemCount, getNextGroupByTotalWCU } from './partition-strategy';
 import { addTablePrefixToRequest, removeTablePrefixFromResponse, removePrefix } from './table-prefixes';
+import { getNonNegativeInteger, getPositiveInteger, appendArray, wait } from './utils';
 
 export class DynamoDBWrapper {
     public dynamoDB: any;
@@ -23,10 +24,10 @@ export class DynamoDBWrapper {
         options = options || {};
         options.retryDelayOptions = options.retryDelayOptions || {};
         this.tableNamePrefix = typeof options.tableNamePrefix === 'string' ? options.tableNamePrefix : '';
-        this.groupDelayMs = _getNonNegativeInteger([options.groupDelayMs, 100]);
-        this.maxRetries = _getNonNegativeInteger([options.maxRetries, 10]);
+        this.groupDelayMs = getNonNegativeInteger([options.groupDelayMs, 100]);
+        this.maxRetries = getNonNegativeInteger([options.maxRetries, 10]);
         this.retryDelayOptions = {};
-        this.retryDelayOptions.base = _getNonNegativeInteger([options.retryDelayOptions.base, 100]);
+        this.retryDelayOptions.base = getNonNegativeInteger([options.retryDelayOptions.base, 100]);
         if (typeof options.retryDelayOptions.customBackoff === 'function') {
             this.retryDelayOptions.customBackoff = options.retryDelayOptions.customBackoff;
         }
@@ -157,7 +158,7 @@ export class DynamoDBWrapper {
 
         // set default options
         options = options || {};
-        options.groupDelayMs = _getNonNegativeInteger([options.groupDelayMs, this.groupDelayMs]);
+        options.groupDelayMs = getNonNegativeInteger([options.groupDelayMs, this.groupDelayMs]);
 
         let responses = await this._queryOrScanHelper('query', params, options.groupDelayMs);
         return _makeQueryOrScanResponse(responses);
@@ -180,7 +181,7 @@ export class DynamoDBWrapper {
 
         // set default options
         options = options || {};
-        options.groupDelayMs = _getNonNegativeInteger([options.groupDelayMs, this.groupDelayMs]);
+        options.groupDelayMs = getNonNegativeInteger([options.groupDelayMs, this.groupDelayMs]);
 
         let responses = await this._queryOrScanHelper('scan', params, options.groupDelayMs);
         return _makeQueryOrScanResponse(responses);
@@ -217,9 +218,9 @@ export class DynamoDBWrapper {
             let unprefixedTableName = removePrefix(this.tableNamePrefix, tableName);
             let option: IBatchWriteItemOption = options[unprefixedTableName] || {};
             option.partitionStrategy = option.partitionStrategy || options.partitionStrategy;
-            option.groupDelayMs = _getNonNegativeInteger([option.groupDelayMs, options.groupDelayMs, this.groupDelayMs]);
-            option.targetGroupWCU = _getPositiveInteger([option.targetGroupWCU, options.targetGroupWCU, 5]);
-            option.targetItemCount = _getPositiveInteger([option.targetItemCount, options.targetItemCount, 25]);
+            option.groupDelayMs = getNonNegativeInteger([option.groupDelayMs, options.groupDelayMs, this.groupDelayMs]);
+            option.targetGroupWCU = getPositiveInteger([option.targetGroupWCU, options.targetGroupWCU, 5]);
+            option.targetItemCount = getPositiveInteger([option.targetItemCount, options.targetItemCount, 25]);
 
             totalRequestItems += params.RequestItems[tableName].length;
             promises.push(this._batchWriteItemHelper(tableName, params, option));
@@ -239,7 +240,7 @@ export class DynamoDBWrapper {
 
         // make subsequent requests to get remaining pages of data
         while (res.LastEvaluatedKey) {
-            await this._wait(groupDelayMs);
+            await wait(groupDelayMs);
             params.ExclusiveStartKey = res.LastEvaluatedKey;
             res = await this._callDynamoDB(method, params);
             list.push(res);
@@ -282,7 +283,7 @@ export class DynamoDBWrapper {
 
             // wait before processing the next group, or exit if nothing left to do
             if (nextGroup) {
-                await this._wait(options.groupDelayMs);
+                await wait(options.groupDelayMs);
             } else {
                 break;
             }
@@ -342,7 +343,7 @@ export class DynamoDBWrapper {
                     retryCount: retryCount,
                     retryDelayMs: waitMs
                 });
-                await this._wait(waitMs);
+                await wait(waitMs);
             } else {
                 break;
             }
@@ -375,14 +376,6 @@ export class DynamoDBWrapper {
         } else {
             return this.retryDelayOptions.base * Math.pow(2, retryCount - 1);
         }
-    }
-
-    private _wait(ms: number): Promise<any> {
-        return new Promise(resolve => {
-            setTimeout(() => {
-                resolve();
-            }, ms);
-        });
     }
 
     private _emitConsumedCapacitySummary(method: string, response: any) {
@@ -429,7 +422,7 @@ function _makeQueryOrScanResponse(responses: any): any {
     for (let res of responses) {
         count += res.Count;
         scannedCount += res.ScannedCount;
-        _appendArray(items, res.Items);
+        appendArray(items, res.Items);
     }
 
     let result: any = {
@@ -460,7 +453,7 @@ function _makeBatchWriteItemResponse(tableNames: string[], responsesPerTable: Dy
         // get a flat array of unprocessed items for this table
         for (let res of responses) {
             if (res.UnprocessedItems) {
-                _appendArray(unprocessedItems, res.UnprocessedItems[tableName]);
+                appendArray(unprocessedItems, res.UnprocessedItems[tableName]);
             }
         }
 
@@ -488,7 +481,7 @@ function _makeBatchWriteItemResponse(tableNames: string[], responsesPerTable: Dy
     // aggregate consumed capacity for all tables
     let responses = [];
     for (let r of responsesPerTable) {
-        _appendArray(responses, r);
+        appendArray(responses, r);
     }
     _aggregateConsumedCapacityMultipleFromResponses(responses, result);
 
@@ -598,29 +591,5 @@ function _validateBatchWriteItemParams(params: DynamoDB.BatchWriteItemInput): vo
             ErrorCode.NotYetImplementedError,
             ErrorMessage.ItemCollectionMetrics
         );
-    }
-}
-
-function _getNonNegativeInteger(arr: any[]) {
-    arr.push(0);
-    for (let v of arr) {
-        if (typeof v === 'number' && !isNaN(v) && v < Number.MAX_SAFE_INTEGER && v >= 0 && Math.round(v) === v) {
-            return v;
-        }
-    }
-}
-
-function _getPositiveInteger(arr: any[]) {
-    arr.push(1);
-    for (let v of arr) {
-        if (typeof v === 'number' && !isNaN(v) && v < Number.MAX_SAFE_INTEGER && v > 0 && Math.round(v) === v) {
-            return v;
-        }
-    }
-}
-
-function _appendArray(array1: any[], array2: any[]) {
-    if (array2 && array2.length > 0) {
-        Array.prototype.push.apply(array1, array2);
     }
 }
