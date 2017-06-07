@@ -282,7 +282,6 @@ The following methods are passed straight through to the AWS JavaScript SDK:
 - `updateItem(params)`
 - `putItem(params)`
 - `deleteItem(params)`
-- `batchGetItem(params)`
 
 ## Enhanced API methods
 
