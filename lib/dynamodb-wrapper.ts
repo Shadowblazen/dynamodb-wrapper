@@ -281,6 +281,12 @@ export class DynamoDBWrapper {
             groupStartIndex += nextGroup.length;
             nextGroup = getNextGroup(writeRequests, groupStartIndex, options);
 
+            // notifies observers the number of items processed so far
+            this.events.emit('batchGroupWritten', {
+                tableName: tableName,
+                processedCount: groupStartIndex
+            });
+
             // wait before processing the next group, or exit if nothing left to do
             if (nextGroup) {
                 await wait(options.groupDelayMs);

@@ -781,6 +781,30 @@ describe('lib/dynamodb-wrapper', () => {
             return test();
         }));
 
+        it('should emit batchGroupWritten after processing a group', testAsync(() => {
+            async function test() {
+                let params = _setupBatchWriteItemParams({
+                  isMultipleTables: true
+                });
+                let mock = _setupDynamoDBWrapper();
+                let dynamoDB = mock.dynamoDB;
+                let dynamoDBWrapper = mock.dynamoDBWrapper;
+
+                let counts = new Map();
+                dynamoDBWrapper.events.on('batchGroupWritten', function onConsumedCapacity(e) {
+                    counts.set(e.tableName, e.processedCount);
+                });
+
+                await dynamoDBWrapper.batchWriteItem(params);
+
+                expect(counts.size).toEqual(2);
+                expect(counts.get('Test')).toEqual(10);
+                expect(counts.get('AnotherTest')).toEqual(4);
+            }
+
+            return test();
+        }));
+
         it('should batch write items with custom options per table', testAsync(() => {
             async function test() {
                 let params = _setupBatchWriteItemParams();
