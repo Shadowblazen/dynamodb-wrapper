@@ -16,6 +16,7 @@ declare module "dynamodb-wrapper" {
         updateItem(params: DynamoDBWrapper.UpdateItemInput): Promise<DynamoDBWrapper.UpdateItemOutput>;
         putItem(params: DynamoDBWrapper.PutItemInput): Promise<DynamoDBWrapper.PutItemOutput>;
         deleteItem(params: DynamoDBWrapper.DeleteItemInput): Promise<DynamoDBWrapper.DeleteItemOutput>;
+        batchGetItem(params: DynamoDBWrapper.BatchGetItemInput): Promise<DynamoDBWrapper.BatchGetItemOutput>;
         query(params: DynamoDBWrapper.QueryInput, options?: DynamoDBWrapper.IQueryOptions): Promise<DynamoDBWrapper.QueryOutput>;
         scan(params: DynamoDBWrapper.ScanInput, options?: DynamoDBWrapper.IScanOptions): Promise<DynamoDBWrapper.ScanOutput>;
         batchWriteItem(params: DynamoDBWrapper.BatchWriteItemInput, options?: DynamoDBWrapper.IBatchWriteItemOptions): Promise<DynamoDBWrapper.BatchWriteItemOutput>;

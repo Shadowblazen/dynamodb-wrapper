@@ -1,5 +1,10 @@
 # dynamodb-wrapper changelog
 
+## 1.4.0
+
+- added `batchGroupWritten` event to enable observer to follow the batch progress
+- added `batchGetItem` method
+
 ## 1.3.0
 
 - added a couple missing fields to `index.d.ts` for TypeScript consumers

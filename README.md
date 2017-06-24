@@ -88,6 +88,14 @@ dynamoDBWrapper.events.on('consumedCapacity', function (e) {
 // ]
 ```
 
+*(Optional)* When using the `DynamoDBWrapper.batchWriteItem()` API method, there is a `batchGroupWritten` event that will notify you of how many items have been processed so far.
+
+```
+dynamoDBWrapper.events.on('batchGroupWritten', function (e) {
+    console.log(e.tableName, e.processedCount);
+});
+```
+
 ### Example: Bulk Read
 
 Read large collections of data from a DynamoDB table with a single API call. Multiple pages of data are aggregated and returned in a single response.
@@ -282,6 +290,7 @@ The following methods are passed straight through to the AWS JavaScript SDK:
 - `updateItem(params)`
 - `putItem(params)`
 - `deleteItem(params)`
+- `batchGetItem(params)`
 
 ## Enhanced API methods
 
