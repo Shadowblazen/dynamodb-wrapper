@@ -43,7 +43,7 @@
   "license": "MIT",
   "typings": "index.d.ts",
   "engines": {
-    "node": ">=4.5.0"
+    "node": ">=4.0.0"
   },
   "devDependencies": {
     "coveralls": "^2.11.15",
