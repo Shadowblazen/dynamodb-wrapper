@@ -50,7 +50,7 @@ gulp.task('test.coverage', function (done) {
 gulp.task('build', function (done) {
     runSequence(
         'clean',
-        ['transpile.lib', 'transpile.test', 'copy.assets'],
+        ['transpile.lib', 'transpile.test'],
         done
     );
 });
@@ -69,11 +69,6 @@ gulp.task('transpile.test', function () {
     return gulp.src('test/**/*.ts')
         .pipe(tsProject())
         .pipe(gulp.dest('test'));
-});
-
-gulp.task('copy.assets', function () {
-    return gulp.src('tools/**/*.js')
-        .pipe(gulp.dest('bin'));
 });
 
 gulp.task('clean', function (done) {
