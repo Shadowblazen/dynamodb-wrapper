@@ -71,6 +71,16 @@ describe('lib/table-prefixes', () => {
             });
         });
 
+        it('should be a noop if the table prefix is empty string', () => {
+            let params = {
+                TableName: 'MyTable'
+            };
+
+            addTablePrefixToRequest('', params);
+
+            expect(params.TableName).toBe('MyTable');
+        });
+
     });
 
     describe('removeTablePrefixFromResponse()', () => {
@@ -107,6 +117,24 @@ describe('lib/table-prefixes', () => {
                 UnprocessedKeys: {
                     'Table1': {},
                     'Table2': {}
+                }
+            });
+        });
+
+        it('should remove table prefix from UnprocessedItems (used in BatchWriteItem)', () => {
+            let response: any = {
+                UnprocessedItems: {
+                    'dev-Table1': [],
+                    'dev-Table2': []
+                }
+            };
+
+            removeTablePrefixFromResponse('dev-', response);
+
+            expect(response).toEqual({
+                UnprocessedItems: {
+                    'Table1': [],
+                    'Table2': []
                 }
             });
         });
@@ -168,6 +196,24 @@ describe('lib/table-prefixes', () => {
                         TableName: 'Table2'
                     }
                 ]
+            });
+        });
+
+        it('should be a noop if the table prefix is empty string', () => {
+            let response: any = {
+                Responses: {
+                    Table1: [],
+                    Table2: []
+                }
+            };
+
+            removeTablePrefixFromResponse('', response);
+
+            expect(response).toEqual({
+                Responses: {
+                    'Table1': [],
+                    'Table2': []
+                }
             });
         });
 

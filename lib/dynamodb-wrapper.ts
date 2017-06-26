@@ -4,7 +4,7 @@ import { EventEmitter } from 'events';
 import { DynamoDB } from 'aws-sdk';
 import { ErrorCode, ErrorMessage, Exception } from './error-types';
 import { getNextGroupByItemCount, getNextGroupByTotalWCU } from './partition-strategy';
-import { addTablePrefixToRequest, removeTablePrefixFromResponse, removePrefix } from './table-prefixes';
+import { addTablePrefixToRequest, removeTablePrefixFromResponse, removePrefix, removePrefixes } from './table-prefixes';
 import { getNonNegativeInteger, getPositiveInteger, appendArray, wait } from './utils';
 
 export class DynamoDBWrapper {
@@ -40,7 +40,6 @@ export class DynamoDBWrapper {
      */
 
     public async createTable(params: DynamoDB.CreateTableInput): Promise<DynamoDB.CreateTableOutput> {
-        addTablePrefixToRequest(this.tableNamePrefix, params);
         return await this._callDynamoDB('createTable', params);
     }
 
@@ -52,7 +51,6 @@ export class DynamoDBWrapper {
      */
 
     public async updateTable(params: DynamoDB.UpdateTableInput): Promise<DynamoDB.UpdateTableOutput> {
-        addTablePrefixToRequest(this.tableNamePrefix, params);
         return await this._callDynamoDB('updateTable', params);
     }
 
@@ -64,7 +62,6 @@ export class DynamoDBWrapper {
      */
 
     public async describeTable(params: DynamoDB.DescribeTableInput): Promise<DynamoDB.DescribeTableOutput> {
-        addTablePrefixToRequest(this.tableNamePrefix, params);
         return await this._callDynamoDB('describeTable', params);
     }
 
@@ -76,7 +73,6 @@ export class DynamoDBWrapper {
      */
 
     public async deleteTable(params: DynamoDB.DeleteTableInput): Promise<DynamoDB.DeleteTableOutput> {
-        addTablePrefixToRequest(this.tableNamePrefix, params);
         return await this._callDynamoDB('deleteTable', params);
     }
 
@@ -88,7 +84,6 @@ export class DynamoDBWrapper {
      */
 
     public async getItem(params: DynamoDB.GetItemInput): Promise<DynamoDB.GetItemOutput> {
-        addTablePrefixToRequest(this.tableNamePrefix, params);
         return await this._callDynamoDB('getItem', params);
     }
 
@@ -100,7 +95,6 @@ export class DynamoDBWrapper {
      */
 
     public async updateItem(params: DynamoDB.UpdateItemInput): Promise<DynamoDB.UpdateItemOutput> {
-        addTablePrefixToRequest(this.tableNamePrefix, params);
         return await this._callDynamoDB('updateItem', params);
     }
 
@@ -112,7 +106,6 @@ export class DynamoDBWrapper {
      */
 
     public async putItem(params: DynamoDB.PutItemInput): Promise<DynamoDB.PutItemOutput> {
-        addTablePrefixToRequest(this.tableNamePrefix, params);
         return await this._callDynamoDB('putItem', params);
     }
 
@@ -124,7 +117,6 @@ export class DynamoDBWrapper {
      */
 
     public async deleteItem(params: DynamoDB.DeleteItemInput): Promise<DynamoDB.DeleteItemOutput> {
-        addTablePrefixToRequest(this.tableNamePrefix, params);
         return await this._callDynamoDB('deleteItem', params);
     }
 
@@ -136,7 +128,6 @@ export class DynamoDBWrapper {
      */
 
     public async batchGetItem(params: DynamoDB.BatchGetItemInput): Promise<DynamoDB.BatchGetItemOutput> {
-        addTablePrefixToRequest(this.tableNamePrefix, params);
         return await this._callDynamoDB('batchGetItem', params);
     }
 
@@ -153,8 +144,6 @@ export class DynamoDBWrapper {
      */
 
     public async query(params: DynamoDB.QueryInput, options?: IQueryOptions): Promise<DynamoDB.QueryOutput> {
-        addTablePrefixToRequest(this.tableNamePrefix, params);
-
         // set default options
         options = options || {};
         options.groupDelayMs = getNonNegativeInteger([options.groupDelayMs, this.groupDelayMs]);
@@ -176,8 +165,6 @@ export class DynamoDBWrapper {
      */
 
     public async scan(params: DynamoDB.ScanInput, options?: IScanOptions): Promise<DynamoDB.ScanOutput> {
-        addTablePrefixToRequest(this.tableNamePrefix, params);
-
         // set default options
         options = options || {};
         options.groupDelayMs = getNonNegativeInteger([options.groupDelayMs, this.groupDelayMs]);
@@ -205,7 +192,6 @@ export class DynamoDBWrapper {
                                 options?: IBatchWriteItemOptions): Promise<DynamoDB.BatchWriteItemOutput> {
 
         _validateBatchWriteItemParams(params);
-        addTablePrefixToRequest(this.tableNamePrefix, params);
 
         let tableNames = Object.keys(params.RequestItems);
         let totalRequestItems = 0;
@@ -214,8 +200,7 @@ export class DynamoDBWrapper {
 
         for (let tableName of tableNames) {
             // set default options (note: backwards compatibility, see DEPRECATED comment on IBatchWriteItemOptions)
-            let unprefixedTableName = removePrefix(this.tableNamePrefix, tableName);
-            let option: IBatchWriteItemOption = options[unprefixedTableName] || {};
+            let option: IBatchWriteItemOption = options[tableName] || {};
             option.partitionStrategy = option.partitionStrategy || options.partitionStrategy;
             option.groupDelayMs = getNonNegativeInteger([option.groupDelayMs, options.groupDelayMs, this.groupDelayMs]);
             option.targetGroupWCU = getPositiveInteger([option.targetGroupWCU, options.targetGroupWCU, 5]);
@@ -317,9 +302,10 @@ export class DynamoDBWrapper {
             result = null;
 
             try {
+                addTablePrefixToRequest(this.tableNamePrefix, params);
                 result = await this.dynamoDB[method](params).promise();
-                responses.push(result);
                 removeTablePrefixFromResponse(this.tableNamePrefix, result);
+                responses.push(result);
                 this._emitConsumedCapacitySummary(method, result);
 
                 // BatchWriteItem: retry unprocessed items
@@ -366,7 +352,7 @@ export class DynamoDBWrapper {
                 // in the array, or use params.RequestItems if there were no successful responses
                 result.UnprocessedItems = responses.length > 0
                     ? responses[responses.length - 1].UnprocessedItems
-                    : params.RequestItems;
+                    : removePrefixes(this.tableNamePrefix, params.RequestItems);
             } else {
                 throw error;
             }
@@ -386,13 +372,11 @@ export class DynamoDBWrapper {
     private _emitConsumedCapacitySummary(method: string, response: any) {
         if (response.ConsumedCapacity) {
             let capacityType = _getMethodCapacityUnitsType(method);
-            if (capacityType) {
-                this.events.emit('consumedCapacity', {
-                    method: method,
-                    capacityType: capacityType,
-                    consumedCapacity: response.ConsumedCapacity
-                });
-            }
+            this.events.emit('consumedCapacity', {
+                method: method,
+                capacityType: capacityType,
+                consumedCapacity: response.ConsumedCapacity
+            });
         }
     }
 
@@ -403,7 +387,6 @@ function _extractTableNameFromRequest(params: any): string {
 }
 
 function _getMethodCapacityUnitsType(method: string): string {
-    /* tslint:disable:switch-default */
     switch (method) {
         case 'getItem':
         case 'query':
@@ -414,9 +397,9 @@ function _getMethodCapacityUnitsType(method: string): string {
         case 'updateItem':
         case 'deleteItem':
         case 'batchWriteItem':
+        default:
             return 'WriteCapacityUnits';
     }
-    /* tslint:enable:switch-default */
 }
 
 function _makeQueryOrScanResponse(responses: any): any {

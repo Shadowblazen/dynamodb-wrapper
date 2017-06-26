@@ -18,6 +18,7 @@ describe('lib/dynamodb-wrapper', () => {
         return {
             dynamoDB: mockDynamoDB,
             dynamoDBWrapper: new DynamoDBWrapper(mockDynamoDB, {
+                tableNamePrefix: 'local-',
                 groupDelayMs: 0,
                 maxRetries: 2,
                 retryDelayOptions: {
@@ -332,7 +333,7 @@ describe('lib/dynamodb-wrapper', () => {
                 expect(response.Items.length).toBe(6);
                 expect(response.ConsumedCapacity).toEqual({
                     CapacityUnits: 21,
-                    TableName: params.TableName
+                    TableName: 'Test'
                 });
             }
 
@@ -353,7 +354,7 @@ describe('lib/dynamodb-wrapper', () => {
                 expect(response.Items.length).toBe(6);
                 expect(response.ConsumedCapacity).toEqual({
                     CapacityUnits: 21,
-                    TableName: params.TableName,
+                    TableName: 'Test',
                     Table: {
                         CapacityUnits: 6
                     },
@@ -428,7 +429,7 @@ describe('lib/dynamodb-wrapper', () => {
                 expect(response.Items.length).toBe(6);
                 expect(response.ConsumedCapacity).toEqual({
                     CapacityUnits: 21,
-                    TableName: params.TableName
+                    TableName: 'Test'
                 });
             }
 
@@ -449,7 +450,7 @@ describe('lib/dynamodb-wrapper', () => {
                 expect(response.Items.length).toBe(6);
                 expect(response.ConsumedCapacity).toEqual({
                     CapacityUnits: 21,
-                    TableName: params.TableName,
+                    TableName: 'Test',
                     Table: {
                         CapacityUnits: 6
                     },
@@ -670,6 +671,7 @@ describe('lib/dynamodb-wrapper', () => {
                 });
 
                 expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(3);
+                console.log(JSON.stringify(response, null, 2)); //tslint:disable-line
                 expect(response.UnprocessedItems['Test'].length).toEqual(9);
             }
 
