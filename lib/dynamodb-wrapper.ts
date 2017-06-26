@@ -1,4 +1,3 @@
-/// <reference path="../typings/manifest.d.ts" />
 /// <reference path="./dynamodb-wrapper.d.ts" />
 
 import { EventEmitter } from 'events';

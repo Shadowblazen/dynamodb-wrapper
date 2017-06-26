@@ -29,7 +29,7 @@ describe('lib/table-prefixes', () => {
         });
 
         it('should insert table prefix in RequestItems (used in BatchGetItem, BatchWriteItem)', () => {
-            let params = {
+            let params: any = {
                 RequestItems: {
                     Table1: [],
                     Table2: []
@@ -47,7 +47,7 @@ describe('lib/table-prefixes', () => {
         });
 
         it('should NOT insert table prefix in RequestItems if the table name already begins with the prefix', () => {
-            let params = {
+            let params: any = {
                 RequestItems: {
                     'dev-Table1': [],
                     'dev-Table2': []
@@ -76,7 +76,7 @@ describe('lib/table-prefixes', () => {
     describe('removeTablePrefixFromResponse()', () => {
 
         it('should remove table prefix from Responses (used in BatchGetItem)', () => {
-            let response = {
+            let response: any = {
                 Responses: {
                     'dev-Table1': [],
                     'dev-Table2': []
@@ -94,7 +94,7 @@ describe('lib/table-prefixes', () => {
         });
 
         it('should remove table prefix from UnprocessedKeys (used in BatchGetItem)', () => {
-            let response = {
+            let response: any = {
                 UnprocessedKeys: {
                     'dev-Table1': {},
                     'dev-Table2': {}
@@ -112,7 +112,7 @@ describe('lib/table-prefixes', () => {
         });
 
         it('should remove table prefix from ItemCollectionMetrics (used in BatchWriteItem)', () => {
-            let response = {
+            let response: any = {
                 ItemCollectionMetrics: {
                     'dev-Table1': [],
                     'dev-Table2': []

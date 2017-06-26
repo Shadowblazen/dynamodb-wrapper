@@ -3,11 +3,10 @@ var del = require('del');
 var gulp = require('gulp');
 var tslint = require('gulp-tslint');
 var tsc = require('gulp-typescript');
+var jasmine = require('gulp-jasmine');
+var JasmineConsoleReporter = require('jasmine-console-reporter');
 var runSequence = require('run-sequence');
 var istanbul = require('gulp-istanbul');
-
-// custom modules
-var jasmine = require('./tools/jasmine-runner');
 
 /*********************************************************************************************************************
  * Public tasks: run these from the console, e.g. 'gulp start' or 'gulp test'
@@ -25,7 +24,14 @@ gulp.task('default', function (done) {
 gulp.task('start', ['build', 'lint', 'watch.lib']);
 
 gulp.task('test', function () {
-    return gulp.src('bin/**/*spec.js').pipe(jasmine());
+    var options = {
+        reporter: new JasmineConsoleReporter({
+            colors: process.argv.indexOf('--no-color') === -1,
+            verbosity: 3
+        })
+    };
+
+    return gulp.src('bin/**/*spec.js').pipe(jasmine(options));
 });
 
 gulp.task('test.coverage', function (done) {
@@ -44,17 +50,25 @@ gulp.task('test.coverage', function (done) {
 gulp.task('build', function (done) {
     runSequence(
         'clean',
-        ['transpile', 'copy.assets'],
+        ['transpile.lib', 'transpile.test', 'copy.assets'],
         done
     );
 });
 
-gulp.task('transpile', function () {
+gulp.task('transpile.lib', function () {
     var tsProject = tsc.createProject('tsconfig.json');
 
     return gulp.src('lib/**/*.ts')
         .pipe(tsProject())
         .pipe(gulp.dest('bin'));
+});
+
+gulp.task('transpile.test', function () {
+    var tsProject = tsc.createProject('tsconfig.json');
+
+    return gulp.src('test/**/*.ts')
+        .pipe(tsProject())
+        .pipe(gulp.dest('test'));
 });
 
 gulp.task('copy.assets', function () {
@@ -63,7 +77,7 @@ gulp.task('copy.assets', function () {
 });
 
 gulp.task('clean', function (done) {
-    del(['bin', 'coverage']).then(function () {
+    del(['bin', 'coverage', 'test/**/*.js']).then(function () {
         done();
     });
 });
