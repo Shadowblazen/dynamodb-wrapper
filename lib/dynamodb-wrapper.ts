@@ -199,9 +199,9 @@ export class DynamoDBWrapper {
         options = options || {};
 
         for (let tableName of tableNames) {
-            // set default options (note: backwards compatibility, see DEPRECATED comment on IBatchWriteItemOptions)
-            let option: IBatchWriteItemOption = options[tableName] || {};
-            option.partitionStrategy = option.partitionStrategy || options.partitionStrategy;
+            // set default options
+            let option = <IBatchWriteItemOption> options[tableName] || {};
+            option.partitionStrategy = option.partitionStrategy || <string> options.partitionStrategy;
             option.groupDelayMs = getNonNegativeInteger([option.groupDelayMs, options.groupDelayMs, this.groupDelayMs]);
             option.targetGroupWCU = getPositiveInteger([option.targetGroupWCU, options.targetGroupWCU, 5]);
             option.targetItemCount = getPositiveInteger([option.targetItemCount, options.targetItemCount, 25]);

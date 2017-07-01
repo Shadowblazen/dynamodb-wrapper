@@ -50,18 +50,11 @@ declare module "dynamodb-wrapper" {
         }
 
         export interface IBatchWriteItemOptions {
-            [key: string]: IBatchWriteItemOption;
-
-            // DEPRECATED - moved to IBatchWriteItemOption
-            // still currently supported for backwards compatibility, but may be removed in the future
-            partitionStrategy?: 'EqualItemCount' | 'EvenlyDistributedGroupWCU';
-            targetItemCount?: number;
-            targetGroupWCU?: number;
-            groupDelayMs?: number;
+            [tableName: string]: IBatchWriteItemOption | string | number;
         }
 
         export interface IBatchWriteItemOption {
-            partitionStrategy?: 'EqualItemCount' | 'EvenlyDistributedGroupWCU';
+            partitionStrategy?: string;
             targetItemCount?: number;
             targetGroupWCU?: number;
             groupDelayMs?: number;

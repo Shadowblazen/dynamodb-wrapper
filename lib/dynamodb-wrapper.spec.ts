@@ -671,7 +671,6 @@ describe('lib/dynamodb-wrapper', () => {
                 });
 
                 expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(3);
-                console.log(JSON.stringify(response, null, 2)); //tslint:disable-line
                 expect(response.UnprocessedItems['Test'].length).toEqual(9);
             }
 
