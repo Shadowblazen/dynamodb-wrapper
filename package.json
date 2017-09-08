@@ -48,19 +48,19 @@
   },
   "devDependencies": {
     "@types/aws-sdk": "^2.7.0",
-    "@types/jasmine": "^2.5.53",
-    "@types/node": "^8.0.7",
+    "@types/jasmine": "^2.5.54",
+    "@types/node": "^8.0.28",
     "coveralls": "^2.13.1",
     "del": "^3.0.0",
     "gulp": "^3.9.1",
     "gulp-istanbul": "^1.1.2",
     "gulp-jasmine": "^2.4.2",
-    "gulp-tslint": "^8.1.1",
-    "gulp-typescript": "^3.1.7",
-    "jasmine-console-reporter": "^1.2.7",
-    "run-sequence": "^2.0.0",
-    "tslint": "^5.4.3",
-    "typescript": "^2.4.1"
+    "gulp-tslint": "^8.1.2",
+    "gulp-typescript": "^3.2.2",
+    "jasmine-console-reporter": "^2.0.1",
+    "run-sequence": "^2.1.0",
+    "tslint": "^5.7.0",
+    "typescript": "^2.5.2"
   },
   "peerDependencies": {
     "aws-sdk": "2.x"

@@ -436,10 +436,10 @@ function _makeBatchWriteItemResponse(tableNames: string[], responsesPerTable: Dy
     for (let i = 0; i < tableNames.length; i++) {
         let unprocessedItems = [];
         let tableName = tableNames[i];
-        let responses = responsesPerTable[i];
+        let listResponses = responsesPerTable[i];
 
         // get a flat array of unprocessed items for this table
-        for (let res of responses) {
+        for (let res of listResponses) {
             if (res.UnprocessedItems) {
                 appendArray(unprocessedItems, res.UnprocessedItems[tableName]);
             }
