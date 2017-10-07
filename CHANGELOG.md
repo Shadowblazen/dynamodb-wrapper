@@ -1,5 +1,9 @@
 # dynamodb-wrapper changelog
 
+## 1.4.1
+
+- resolved a minor typings issue in `index.d.ts` (#6)
+
 ## 1.4.0
 
 - added `batchGroupWritten` event to enable observer to follow the batch progress
