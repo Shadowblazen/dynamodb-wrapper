@@ -2,14 +2,6 @@ import { DynamoDB } from 'aws-sdk';
 import { IMockDynamoDBOptions, MockDynamoDB } from '../test/mock-dynamodb';
 import { DynamoDBWrapper } from './dynamodb-wrapper';
 
-function testAsync(fn) {
-    return (done) => {
-        fn.apply(null, arguments)
-            .then(() => done())
-            .catch((err) => done.fail(err));
-    };
-}
-
 describe('lib/dynamodb-wrapper', () => {
 
     function _setupDynamoDBWrapper(options?: IMockDynamoDBOptions) {
@@ -89,25 +81,21 @@ describe('lib/dynamodb-wrapper', () => {
         'deleteItem',
         'batchGetItem'
     ].forEach(method => {
-        it('should pass ' + method + '() calls straight through to the AWS SDK', testAsync(() => {
-            async function test() {
-                let params: any = {
-                    TableName: 'Test'
-                };
-                let mock = _setupDynamoDBWrapper();
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
-                dynamoDBWrapper.tableNamePrefix = 'local-';
+        it('should pass ' + method + '() calls straight through to the AWS SDK', async () => {
+            let params: any = {
+                TableName: 'Test'
+            };
+            let mock = _setupDynamoDBWrapper();
+            let dynamoDB = mock.dynamoDB;
+            let dynamoDBWrapper = mock.dynamoDBWrapper;
+            dynamoDBWrapper.tableNamePrefix = 'local-';
 
-                spyOn(dynamoDB, <any> method).and.callThrough();
-                await dynamoDBWrapper[method](params);
+            spyOn(dynamoDB, <any> method).and.callThrough();
+            await dynamoDBWrapper[method](params);
 
-                expect(params.TableName).toBe('local-Test');
-                expect(dynamoDB[method]).toHaveBeenCalledWith(params);
-            }
-
-            return test();
-        }));
+            expect(params.TableName).toBe('local-Test');
+            expect(dynamoDB[method]).toHaveBeenCalledWith(params);
+        });
     });
 
     describe('putItem()', () => {
@@ -129,155 +117,131 @@ describe('lib/dynamodb-wrapper', () => {
             return params;
         }
 
-        it('should put item', testAsync(() => {
-            async function test() {
-                let params = _setupPutItemParams();
-                let mock = _setupDynamoDBWrapper();
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
+        it('should put item', async () => {
+            let params = _setupPutItemParams();
+            let mock = _setupDynamoDBWrapper();
+            let dynamoDB = mock.dynamoDB;
+            let dynamoDBWrapper = mock.dynamoDBWrapper;
 
-                spyOn(dynamoDB, 'putItem').and.callThrough();
-                await dynamoDBWrapper.putItem(params);
+            spyOn(dynamoDB, 'putItem').and.callThrough();
+            await dynamoDBWrapper.putItem(params);
 
-                expect(dynamoDB.putItem).toHaveBeenCalledWith(params);
-            }
+            expect(dynamoDB.putItem).toHaveBeenCalledWith(params);
+        });
 
-            return test();
-        }));
+        it('should emit a "consumedCapacity" event when a response contains a ConsumedCapacity object', async () => {
+            let params = _setupPutItemParams({ ReturnConsumedCapacity: 'TOTAL' });
+            let mock = _setupDynamoDBWrapper();
+            let dynamoDB = mock.dynamoDB;
+            let dynamoDBWrapper = mock.dynamoDBWrapper;
 
-        it('should emit a "consumedCapacity" event when a response contains a ConsumedCapacity object', testAsync(() => {
-            async function test() {
-                let params = _setupPutItemParams({ ReturnConsumedCapacity: 'TOTAL' });
-                let mock = _setupDynamoDBWrapper();
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
+            let event = null;
 
-                let event = null;
+            dynamoDBWrapper.events.on('consumedCapacity', function onConsumedCapacity(e) {
+                event = e;
+            });
 
-                dynamoDBWrapper.events.on('consumedCapacity', function onConsumedCapacity(e) {
-                    event = e;
-                });
+            await dynamoDBWrapper.putItem(params);
 
-                await dynamoDBWrapper.putItem(params);
-
-                expect(event).toEqual({
-                    method: 'putItem',
-                    capacityType: 'WriteCapacityUnits',
-                    consumedCapacity: {
-                        TableName: 'Test',
-                        CapacityUnits: 1
-                    }
-                });
-            }
-
-            return test();
-        }));
-
-        it('should retry a failed request (throttled)', testAsync(() => {
-            async function test() {
-                let params = _setupPutItemParams();
-                let mock = _setupDynamoDBWrapper({
-                    customResponses: {
-                        1: 'ProvisionedThroughputExceededException'
-                    }
-                });
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
-
-                spyOn(dynamoDB, 'putItem').and.callThrough();
-                await dynamoDBWrapper.putItem(params);
-
-                expect(dynamoDB.putItem).toHaveBeenCalledTimes(2);
-            }
-
-            return test();
-        }));
-
-        it('should emit a "retry" event when retrying a failed request', testAsync(() => {
-            async function test() {
-                let params = _setupPutItemParams();
-                let mock = _setupDynamoDBWrapper({
-                    customResponses: {
-                        1: 'ProvisionedThroughputExceededException'
-                    }
-                });
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
-
-                let event = null;
-
-                dynamoDBWrapper.events.on('retry', function onRetry(e) {
-                    event = e;
-                });
-
-                await dynamoDBWrapper.putItem(params);
-
-                expect(event).toEqual({
-                    tableName: 'Test',
-                    method: 'putItem',
-                    retryCount: 1,
-                    retryDelayMs: 0
-                });
-            }
-
-            return test();
-        }));
-
-        it('should throw a fatal exception when the maximum number of retries is exceeded', testAsync(() => {
-            async function test() {
-                let params = _setupPutItemParams();
-                let mock = _setupDynamoDBWrapper({
-                    customResponses: {
-                        1: 'ProvisionedThroughputExceededException',
-                        2: 'ProvisionedThroughputExceededException',
-                        3: 'ProvisionedThroughputExceededException'
-                    }
-                });
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
-                dynamoDBWrapper.retryDelayOptions.customBackoff = () => 0;
-
-                spyOn(dynamoDB, 'putItem').and.callThrough();
-
-                let exception;
-                try {
-                    await dynamoDBWrapper.putItem(params);
-                } catch (e) {
-                    exception = e;
+            expect(event).toEqual({
+                method: 'putItem',
+                capacityType: 'WriteCapacityUnits',
+                consumedCapacity: {
+                    TableName: 'Test',
+                    CapacityUnits: 1
                 }
+            });
+        });
 
-                expect(dynamoDB.putItem).toHaveBeenCalledTimes(3);
-                expect(exception.code).toBe('ProvisionedThroughputExceededException');
-                expect(exception.statusCode).toBe(400);
-            }
-
-            return test();
-        }));
-
-        it('should pass AWS non-retryable errors through', testAsync(() => {
-            async function test() {
-                let params = _setupPutItemParams();
-                let mock = _setupDynamoDBWrapper({
-                    customResponses: {
-                        1: 'ValidationException'
-                    }
-                });
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
-
-                let exception;
-                try {
-                    await dynamoDBWrapper.putItem(params);
-                } catch (e) {
-                    exception = e;
+        it('should retry a failed request (throttled)', async () => {
+            let params = _setupPutItemParams();
+            let mock = _setupDynamoDBWrapper({
+                customResponses: {
+                    1: 'ProvisionedThroughputExceededException'
                 }
+            });
+            let dynamoDB = mock.dynamoDB;
+            let dynamoDBWrapper = mock.dynamoDBWrapper;
 
-                expect(exception.code).toBe('ValidationException');
-                expect(exception.statusCode).toBe(400);
+            spyOn(dynamoDB, 'putItem').and.callThrough();
+            await dynamoDBWrapper.putItem(params);
+
+            expect(dynamoDB.putItem).toHaveBeenCalledTimes(2);
+        });
+
+        it('should emit a "retry" event when retrying a failed request', async () => {
+            let params = _setupPutItemParams();
+            let mock = _setupDynamoDBWrapper({
+                customResponses: {
+                    1: 'ProvisionedThroughputExceededException'
+                }
+            });
+            let dynamoDB = mock.dynamoDB;
+            let dynamoDBWrapper = mock.dynamoDBWrapper;
+
+            let event = null;
+
+            dynamoDBWrapper.events.on('retry', function onRetry(e) {
+                event = e;
+            });
+
+            await dynamoDBWrapper.putItem(params);
+
+            expect(event).toEqual({
+                tableName: 'Test',
+                method: 'putItem',
+                retryCount: 1,
+                retryDelayMs: 0
+            });
+        });
+
+        it('should throw a fatal exception when the maximum number of retries is exceeded', async () => {
+            let params = _setupPutItemParams();
+            let mock = _setupDynamoDBWrapper({
+                customResponses: {
+                    1: 'ProvisionedThroughputExceededException',
+                    2: 'ProvisionedThroughputExceededException',
+                    3: 'ProvisionedThroughputExceededException'
+                }
+            });
+            let dynamoDB = mock.dynamoDB;
+            let dynamoDBWrapper = mock.dynamoDBWrapper;
+            dynamoDBWrapper.retryDelayOptions.customBackoff = () => 0;
+
+            spyOn(dynamoDB, 'putItem').and.callThrough();
+
+            let exception;
+            try {
+                await dynamoDBWrapper.putItem(params);
+            } catch (e) {
+                exception = e;
             }
 
-            return test();
-        }));
+            expect(dynamoDB.putItem).toHaveBeenCalledTimes(3);
+            expect(exception.code).toBe('ProvisionedThroughputExceededException');
+            expect(exception.statusCode).toBe(400);
+        });
+
+        it('should pass AWS non-retryable errors through', async () => {
+            let params = _setupPutItemParams();
+            let mock = _setupDynamoDBWrapper({
+                customResponses: {
+                    1: 'ValidationException'
+                }
+            });
+            let dynamoDB = mock.dynamoDB;
+            let dynamoDBWrapper = mock.dynamoDBWrapper;
+
+            let exception;
+            try {
+                await dynamoDBWrapper.putItem(params);
+            } catch (e) {
+                exception = e;
+            }
+
+            expect(exception.code).toBe('ValidationException');
+            expect(exception.statusCode).toBe(400);
+        });
     });
 
     describe('query()', () => {
@@ -301,79 +265,66 @@ describe('lib/dynamodb-wrapper', () => {
             return params;
         }
 
-        it('should query by LastEvaluatedKey to return all pages of data', testAsync(() => {
-            async function test() {
-                let params = _setupQueryParams();
-                let mock = _setupDynamoDBWrapper();
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
+        it('should query by LastEvaluatedKey to return all pages of data', async () => {
+            let params = _setupQueryParams();
+            let mock = _setupDynamoDBWrapper();
+            let dynamoDB = mock.dynamoDB;
+            let dynamoDBWrapper = mock.dynamoDBWrapper;
 
-                spyOn(dynamoDB, 'query').and.callThrough();
-                let response = await dynamoDBWrapper.query(params);
+            spyOn(dynamoDB, 'query').and.callThrough();
+            let response = await dynamoDBWrapper.query(params);
 
-                expect(dynamoDB.query).toHaveBeenCalledTimes(3);
-                expect(response.Items.length).toBe(6);
-                expect(response.ConsumedCapacity).not.toBeDefined();
-            }
+            expect(dynamoDB.query).toHaveBeenCalledTimes(3);
+            expect(response.Items.length).toBe(6);
+            expect(response.ConsumedCapacity).not.toBeDefined();
+        });
 
-            return test();
-        }));
+        it('should aggregate consumed capacity (TOTAL) from multiple responses', async () => {
+            let params = _setupQueryParams('TOTAL');
+            let mock = _setupDynamoDBWrapper();
+            let dynamoDB = mock.dynamoDB;
+            let dynamoDBWrapper = mock.dynamoDBWrapper;
 
-        it('should aggregate consumed capacity (TOTAL) from multiple responses', testAsync(() => {
-            async function test() {
-                let params = _setupQueryParams('TOTAL');
-                let mock = _setupDynamoDBWrapper();
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
+            spyOn(dynamoDB, 'query').and.callThrough();
+            let response = await dynamoDBWrapper.query(params);
 
-                spyOn(dynamoDB, 'query').and.callThrough();
-                let response = await dynamoDBWrapper.query(params);
+            expect(dynamoDB.query).toHaveBeenCalledTimes(3);
+            expect(response.Items.length).toBe(6);
+            expect(response.ConsumedCapacity).toEqual({
+                CapacityUnits: 21,
+                TableName: 'Test'
+            });
+        });
 
-                expect(dynamoDB.query).toHaveBeenCalledTimes(3);
-                expect(response.Items.length).toBe(6);
-                expect(response.ConsumedCapacity).toEqual({
-                    CapacityUnits: 21,
-                    TableName: 'Test'
-                });
-            }
+        it('should aggregate consumed capacity (INDEXES) from multiple responses', async () => {
+            let params = _setupQueryParams('INDEXES');
+            let mock = _setupDynamoDBWrapper();
+            let dynamoDB = mock.dynamoDB;
+            let dynamoDBWrapper = mock.dynamoDBWrapper;
 
-            return test();
-        }));
+            spyOn(dynamoDB, 'query').and.callThrough();
+            let response = await dynamoDBWrapper.query(params);
 
-        it('should aggregate consumed capacity (INDEXES) from multiple responses', testAsync(() => {
-            async function test() {
-                let params = _setupQueryParams('INDEXES');
-                let mock = _setupDynamoDBWrapper();
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
-
-                spyOn(dynamoDB, 'query').and.callThrough();
-                let response = await dynamoDBWrapper.query(params);
-
-                expect(dynamoDB.query).toHaveBeenCalledTimes(3);
-                expect(response.Items.length).toBe(6);
-                expect(response.ConsumedCapacity).toEqual({
-                    CapacityUnits: 21,
-                    TableName: 'Test',
-                    Table: {
-                        CapacityUnits: 6
-                    },
-                    LocalSecondaryIndexes: {
-                        MyLocalIndex: {
-                            CapacityUnits: 12
-                        }
-                    },
-                    GlobalSecondaryIndexes: {
-                        MyGlobalIndex: {
-                            CapacityUnits: 3
-                        }
+            expect(dynamoDB.query).toHaveBeenCalledTimes(3);
+            expect(response.Items.length).toBe(6);
+            expect(response.ConsumedCapacity).toEqual({
+                CapacityUnits: 21,
+                TableName: 'Test',
+                Table: {
+                    CapacityUnits: 6
+                },
+                LocalSecondaryIndexes: {
+                    MyLocalIndex: {
+                        CapacityUnits: 12
                     }
-                });
-            }
-
-            return test();
-        }));
-
+                },
+                GlobalSecondaryIndexes: {
+                    MyGlobalIndex: {
+                        CapacityUnits: 3
+                    }
+                }
+            });
+        });
     });
 
     describe('scan()', () => {
@@ -397,79 +348,66 @@ describe('lib/dynamodb-wrapper', () => {
             return params;
         }
 
-        it('should scan by LastEvaluatedKey to return all pages of data', testAsync(() => {
-            async function test() {
-                let params = _setupScanParams();
-                let mock = _setupDynamoDBWrapper();
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
+        it('should scan by LastEvaluatedKey to return all pages of data', async () => {
+            let params = _setupScanParams();
+            let mock = _setupDynamoDBWrapper();
+            let dynamoDB = mock.dynamoDB;
+            let dynamoDBWrapper = mock.dynamoDBWrapper;
 
-                spyOn(dynamoDB, 'scan').and.callThrough();
-                let response = await dynamoDBWrapper.scan(params);
+            spyOn(dynamoDB, 'scan').and.callThrough();
+            let response = await dynamoDBWrapper.scan(params);
 
-                expect(dynamoDB.scan).toHaveBeenCalledTimes(3);
-                expect(response.Items.length).toBe(6);
-                expect(response.ConsumedCapacity).not.toBeDefined();
-            }
+            expect(dynamoDB.scan).toHaveBeenCalledTimes(3);
+            expect(response.Items.length).toBe(6);
+            expect(response.ConsumedCapacity).not.toBeDefined();
+        });
 
-            return test();
-        }));
+        it('should aggregate consumed capacity (TOTAL) from multiple responses', async () => {
+            let params = _setupScanParams('TOTAL');
+            let mock = _setupDynamoDBWrapper();
+            let dynamoDB = mock.dynamoDB;
+            let dynamoDBWrapper = mock.dynamoDBWrapper;
 
-        it('should aggregate consumed capacity (TOTAL) from multiple responses', testAsync(() => {
-            async function test() {
-                let params = _setupScanParams('TOTAL');
-                let mock = _setupDynamoDBWrapper();
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
+            spyOn(dynamoDB, 'scan').and.callThrough();
+            let response = await dynamoDBWrapper.scan(params);
 
-                spyOn(dynamoDB, 'scan').and.callThrough();
-                let response = await dynamoDBWrapper.scan(params);
+            expect(dynamoDB.scan).toHaveBeenCalledTimes(3);
+            expect(response.Items.length).toBe(6);
+            expect(response.ConsumedCapacity).toEqual({
+                CapacityUnits: 21,
+                TableName: 'Test'
+            });
+        });
 
-                expect(dynamoDB.scan).toHaveBeenCalledTimes(3);
-                expect(response.Items.length).toBe(6);
-                expect(response.ConsumedCapacity).toEqual({
-                    CapacityUnits: 21,
-                    TableName: 'Test'
-                });
-            }
+        it('should aggregate consumed capacity (INDEXES) from multiple responses', async () => {
+            let params = _setupScanParams('INDEXES');
+            let mock = _setupDynamoDBWrapper();
+            let dynamoDB = mock.dynamoDB;
+            let dynamoDBWrapper = mock.dynamoDBWrapper;
 
-            return test();
-        }));
+            spyOn(dynamoDB, 'scan').and.callThrough();
+            let response = await dynamoDBWrapper.scan(params);
 
-        it('should aggregate consumed capacity (INDEXES) from multiple responses', testAsync(() => {
-            async function test() {
-                let params = _setupScanParams('INDEXES');
-                let mock = _setupDynamoDBWrapper();
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
-
-                spyOn(dynamoDB, 'scan').and.callThrough();
-                let response = await dynamoDBWrapper.scan(params);
-
-                expect(dynamoDB.scan).toHaveBeenCalledTimes(3);
-                expect(response.Items.length).toBe(6);
-                expect(response.ConsumedCapacity).toEqual({
-                    CapacityUnits: 21,
-                    TableName: 'Test',
-                    Table: {
-                        CapacityUnits: 6
-                    },
-                    LocalSecondaryIndexes: {
-                        MyLocalIndex: {
-                            CapacityUnits: 12
-                        }
-                    },
-                    GlobalSecondaryIndexes: {
-                        MyGlobalIndex: {
-                            CapacityUnits: 3
-                        }
+            expect(dynamoDB.scan).toHaveBeenCalledTimes(3);
+            expect(response.Items.length).toBe(6);
+            expect(response.ConsumedCapacity).toEqual({
+                CapacityUnits: 21,
+                TableName: 'Test',
+                Table: {
+                    CapacityUnits: 6
+                },
+                LocalSecondaryIndexes: {
+                    MyLocalIndex: {
+                        CapacityUnits: 12
                     }
-                });
-            }
-
-            return test();
-        }));
-
+                },
+                GlobalSecondaryIndexes: {
+                    MyGlobalIndex: {
+                        CapacityUnits: 3
+                    }
+                }
+            });
+        });
     });
 
     describe('batchWriteItem()', () => {
@@ -516,374 +454,319 @@ describe('lib/dynamodb-wrapper', () => {
             return params;
         }
 
-        it('should throw a NotYetImplemented exception for item collection metrics', testAsync(() => {
-            async function test() {
-                let mock = _setupDynamoDBWrapper();
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
-                let params: any = {
-                    ReturnItemCollectionMetrics: 'SIZE'
-                };
+        it('should throw a NotYetImplemented exception for item collection metrics', async () => {
+            let mock = _setupDynamoDBWrapper();
+            let dynamoDBWrapper = mock.dynamoDBWrapper;
+            let params: any = {
+                ReturnItemCollectionMetrics: 'SIZE'
+            };
 
-                let exception;
-                try {
-                    await dynamoDBWrapper.batchWriteItem(params);
-                } catch (e) {
-                    exception = e;
-                }
-
-                expect(exception.code).toBe('NotYetImplementedError');
-                expect(exception.message).toBe('ReturnItemCollectionMetrics is supported in the AWS DynamoDB API, ' +
-                    'but this capability is not yet implemented by this wrapper library.');
-            }
-
-            return test();
-        }));
-
-        it('should batch write items with default options', testAsync(() => {
-            async function test() {
-                let params = _setupBatchWriteItemParams();
-                let mock = _setupDynamoDBWrapper();
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
-
-                spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
-
+            let exception;
+            try {
                 await dynamoDBWrapper.batchWriteItem(params);
-
-                expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(1);
-
+            } catch (e) {
+                exception = e;
             }
 
-            return test();
-        }));
+            expect(exception.code).toBe('NotYetImplementedError');
+            expect(exception.message).toBe('ReturnItemCollectionMetrics is supported in the AWS DynamoDB API, ' +
+                'but this capability is not yet implemented by this wrapper library.');
+        });
 
-        it('should emit batchGroupWritten after processing a group', testAsync(() => {
-            async function test() {
-                let params = _setupBatchWriteItemParams({
-                  isMultipleTables: true
-                });
-                let mock = _setupDynamoDBWrapper();
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
+        it('should batch write items with default options', async () => {
+            let params = _setupBatchWriteItemParams();
+            let mock = _setupDynamoDBWrapper();
+            let dynamoDB = mock.dynamoDB;
+            let dynamoDBWrapper = mock.dynamoDBWrapper;
 
-                let counts = new Map();
-                dynamoDBWrapper.events.on('batchGroupWritten', function onConsumedCapacity(e) {
-                    counts.set(e.tableName, e.processedCount);
-                });
+            spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
 
-                await dynamoDBWrapper.batchWriteItem(params);
+            await dynamoDBWrapper.batchWriteItem(params);
 
-                expect(counts.size).toEqual(2);
-                expect(counts.get('Test')).toEqual(10);
-                expect(counts.get('AnotherTest')).toEqual(4);
-            }
+            expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(1);
+        });
 
-            return test();
-        }));
+        it('should emit batchGroupWritten after processing a group', async () => {
+            let params = _setupBatchWriteItemParams({
+              isMultipleTables: true
+            });
+            let mock = _setupDynamoDBWrapper();
+            let dynamoDB = mock.dynamoDB;
+            let dynamoDBWrapper = mock.dynamoDBWrapper;
 
-        it('should batch write items with custom options per table', testAsync(() => {
-            async function test() {
-                let params = _setupBatchWriteItemParams();
-                let mock = _setupDynamoDBWrapper();
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
+            let counts = new Map();
+            dynamoDBWrapper.events.on('batchGroupWritten', function onConsumedCapacity(e) {
+                counts.set(e.tableName, e.processedCount);
+            });
 
-                spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
+            await dynamoDBWrapper.batchWriteItem(params);
 
-                await dynamoDBWrapper.batchWriteItem(params, {
-                    Test: {
-                        partitionStrategy: 'EvenlyDistributedGroupWCU',
-                        targetGroupWCU: 4
-                    }
-                });
+            expect(counts.size).toEqual(2);
+            expect(counts.get('Test')).toEqual(10);
+            expect(counts.get('AnotherTest')).toEqual(4);
+        });
 
-                expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(3);
+        it('should batch write items with custom options per table', async () => {
+            let params = _setupBatchWriteItemParams();
+            let mock = _setupDynamoDBWrapper();
+            let dynamoDB = mock.dynamoDB;
+            let dynamoDBWrapper = mock.dynamoDBWrapper;
 
-            }
+            spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
 
-            return test();
-        }));
-
-        it('should batch write items with custom options (legacy for backwards compatibility)', testAsync(() => {
-            async function test() {
-                let params = _setupBatchWriteItemParams();
-                let mock = _setupDynamoDBWrapper();
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
-
-                spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
-
-                await dynamoDBWrapper.batchWriteItem(params, {
+            await dynamoDBWrapper.batchWriteItem(params, {
+                Test: {
                     partitionStrategy: 'EvenlyDistributedGroupWCU',
                     targetGroupWCU: 4
-                });
+                }
+            });
 
-                expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(3);
+            expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(3);
+        });
 
-            }
+        it('should batch write items with custom options (legacy for backwards compatibility)', async () => {
+            let params = _setupBatchWriteItemParams();
+            let mock = _setupDynamoDBWrapper();
+            let dynamoDB = mock.dynamoDB;
+            let dynamoDBWrapper = mock.dynamoDBWrapper;
 
-            return test();
-        }));
+            spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
 
-        it('should retry failed requests when there are UnprocessedItems', testAsync(() => {
-            async function test() {
-                let params = _setupBatchWriteItemParams();
-                let mock = _setupDynamoDBWrapper({
-                    customResponses: {
-                        1: 'SomeUnprocessedItems'
-                    }
-                });
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
+            await dynamoDBWrapper.batchWriteItem(params, {
+                partitionStrategy: 'EvenlyDistributedGroupWCU',
+                targetGroupWCU: 4
+            });
 
-                spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
+            expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(3);
+        });
 
+        it('should retry failed requests when there are UnprocessedItems', async () => {
+            let params = _setupBatchWriteItemParams();
+            let mock = _setupDynamoDBWrapper({
+                customResponses: {
+                    1: 'SomeUnprocessedItems'
+                }
+            });
+            let dynamoDB = mock.dynamoDB;
+            let dynamoDBWrapper = mock.dynamoDBWrapper;
+
+            spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
+
+            await dynamoDBWrapper.batchWriteItem(params, {
+                partitionStrategy: 'EqualItemCount',
+                targetItemCount: 10
+            });
+
+            expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(2);
+        });
+
+        it('should return a 200 OK response if some items were unprocessed', async () => {
+            let params = _setupBatchWriteItemParams();
+            let mock = _setupDynamoDBWrapper({
+                customResponses: {
+                    1: 'ProvisionedThroughputExceededException',
+                    2: 'ProvisionedThroughputExceededException',
+                    3: 'SomeUnprocessedItems'
+                }
+            });
+            let dynamoDB = mock.dynamoDB;
+            let dynamoDBWrapper = mock.dynamoDBWrapper;
+
+            spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
+
+            let response = await dynamoDBWrapper.batchWriteItem(params, {
+                partitionStrategy: 'EqualItemCount',
+                targetItemCount: 10
+            });
+
+            expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(3);
+            expect(response.UnprocessedItems['Test'].length).toEqual(9);
+        });
+
+        it('should throw a ProvisionedThroughputExceededException if ALL items are unprocessed', async () => {
+            let params = _setupBatchWriteItemParams();
+            let mock = _setupDynamoDBWrapper({
+                customResponses: {
+                    1: 'ProvisionedThroughputExceededException',
+                    2: 'ProvisionedThroughputExceededException',
+                    3: 'ProvisionedThroughputExceededException'
+                }
+            });
+            let dynamoDB = mock.dynamoDB;
+            let dynamoDBWrapper = mock.dynamoDBWrapper;
+
+            spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
+
+            let exception;
+            try {
                 await dynamoDBWrapper.batchWriteItem(params, {
                     partitionStrategy: 'EqualItemCount',
                     targetItemCount: 10
                 });
-
-                expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(2);
-
+            } catch (e) {
+                exception = e;
             }
 
-            return test();
-        }));
+            expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(3);
+            expect(exception.code).toBe('ProvisionedThroughputExceededException');
+            expect(exception.message).toBe('The level of configured provisioned throughput for the table was exceeded. ' +
+                'Consider increasing your provisioning level with the UpdateTable API');
+        });
 
-        it('should return a 200 OK response if some items were unprocessed', testAsync(() => {
-            async function test() {
-                let params = _setupBatchWriteItemParams();
-                let mock = _setupDynamoDBWrapper({
-                    customResponses: {
-                        1: 'ProvisionedThroughputExceededException',
-                        2: 'ProvisionedThroughputExceededException',
-                        3: 'SomeUnprocessedItems'
-                    }
-                });
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
+        it('should aggregate consumed capacity (TOTAL) from multiple responses', async () => {
+            let params = _setupBatchWriteItemParams({
+                returnConsumedCapacity: 'TOTAL'
+            });
+            let mock = _setupDynamoDBWrapper();
+            let dynamoDB = mock.dynamoDB;
+            let dynamoDBWrapper = mock.dynamoDBWrapper;
 
-                spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
+            spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
 
-                let response = await dynamoDBWrapper.batchWriteItem(params, {
+            let response = await dynamoDBWrapper.batchWriteItem(params, {
+                Test: {
                     partitionStrategy: 'EqualItemCount',
-                    targetItemCount: 10
-                });
-
-                expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(3);
-                expect(response.UnprocessedItems['Test'].length).toEqual(9);
-            }
-
-            return test();
-        }));
-
-        it('should throw a ProvisionedThroughputExceededException if ALL items are unprocessed', testAsync(() => {
-            async function test() {
-                let params = _setupBatchWriteItemParams();
-                let mock = _setupDynamoDBWrapper({
-                    customResponses: {
-                        1: 'ProvisionedThroughputExceededException',
-                        2: 'ProvisionedThroughputExceededException',
-                        3: 'ProvisionedThroughputExceededException'
-                    }
-                });
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
-
-                spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
-
-                let exception;
-                try {
-                    await dynamoDBWrapper.batchWriteItem(params, {
-                        partitionStrategy: 'EqualItemCount',
-                        targetItemCount: 10
-                    });
-                } catch (e) {
-                    exception = e;
+                    targetItemCount: 4
                 }
+            });
 
-                expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(3);
-                expect(exception.code).toBe('ProvisionedThroughputExceededException');
-                expect(exception.message).toBe('The level of configured provisioned throughput for the table was exceeded. ' +
-                    'Consider increasing your provisioning level with the UpdateTable API');
-            }
+            expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(3);
+            expect(response.ConsumedCapacity).toEqual([
+                {
+                    CapacityUnits: 60,
+                    TableName: 'Test'
+                }
+            ]);
+        });
 
-            return test();
-        }));
+        it('should aggregate consumed capacity (INDEXES) from multiple responses', async () => {
+            let params = _setupBatchWriteItemParams({
+                returnConsumedCapacity: 'INDEXES'
+            });
+            let mock = _setupDynamoDBWrapper();
+            let dynamoDB = mock.dynamoDB;
+            let dynamoDBWrapper = mock.dynamoDBWrapper;
 
-        it('should aggregate consumed capacity (TOTAL) from multiple responses', testAsync(() => {
-            async function test() {
-                let params = _setupBatchWriteItemParams({
-                    returnConsumedCapacity: 'TOTAL'
-                });
-                let mock = _setupDynamoDBWrapper();
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
+            spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
 
-                spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
-
-                let response = await dynamoDBWrapper.batchWriteItem(params, {
-                    Test: {
-                        partitionStrategy: 'EqualItemCount',
-                        targetItemCount: 4
-                    }
-                });
-
-                expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(3);
-                expect(response.ConsumedCapacity).toEqual([
-                    {
-                        CapacityUnits: 60,
-                        TableName: 'Test'
-                    }
-                ]);
-
-            }
-
-            return test();
-        }));
-
-        it('should aggregate consumed capacity (INDEXES) from multiple responses', testAsync(() => {
-            async function test() {
-                let params = _setupBatchWriteItemParams({
-                    returnConsumedCapacity: 'INDEXES'
-                });
-                let mock = _setupDynamoDBWrapper();
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
-
-                spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
-
-                let response = await dynamoDBWrapper.batchWriteItem(params, {
-                    Test: {
-                        partitionStrategy: 'EqualItemCount',
-                        targetItemCount: 4
-                    }
-                });
-
-                expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(3);
-                expect(response.ConsumedCapacity).toEqual([
-                    {
-                        CapacityUnits: 60,
-                        TableName: 'Test',
-                        Table: {
-                            CapacityUnits: 10
-                        },
-                        LocalSecondaryIndexes: {
-                            MyLocalIndex: {
-                                CapacityUnits: 30
-                            }
-                        },
-                        GlobalSecondaryIndexes: {
-                            MyGlobalIndex: {
-                                CapacityUnits: 20
-                            }
-                        }
-                    }
-                ]);
-
-            }
-
-            return test();
-        }));
-
-        it('should aggregate consumed capacity (TOTAL) when some requests are throttled', testAsync(() => {
-            async function test() {
-                let params = _setupBatchWriteItemParams({
-                    returnConsumedCapacity: 'TOTAL'
-                });
-                let mock = _setupDynamoDBWrapper({
-                    customResponses: {
-                        1: 'SomeUnprocessedItems'
-                    }
-                });
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
-
-                spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
-
-                let response = await dynamoDBWrapper.batchWriteItem(params, {
+            let response = await dynamoDBWrapper.batchWriteItem(params, {
+                Test: {
                     partitionStrategy: 'EqualItemCount',
-                    targetItemCount: 10
-                });
+                    targetItemCount: 4
+                }
+            });
 
-                expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(2);
-                expect(response.ConsumedCapacity).toEqual([
-                    {
-                        CapacityUnits: 60,
-                        TableName: 'Test'
-                    }
-                ]);
-
-            }
-
-            return test();
-        }));
-
-        it('should support batch writing to multiple tables', testAsync(() => {
-            async function test() {
-                let params = _setupBatchWriteItemParams({
-                    isMultipleTables: true,
-                    returnConsumedCapacity: 'INDEXES'
-                });
-                let mock = _setupDynamoDBWrapper();
-                let dynamoDB = mock.dynamoDB;
-                let dynamoDBWrapper = mock.dynamoDBWrapper;
-
-                spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
-
-                let response = await dynamoDBWrapper.batchWriteItem(params, {
-                    Test: {
-                        partitionStrategy: 'EqualItemCount',
-                        targetItemCount: 6
+            expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(3);
+            expect(response.ConsumedCapacity).toEqual([
+                {
+                    CapacityUnits: 60,
+                    TableName: 'Test',
+                    Table: {
+                        CapacityUnits: 10
                     },
-                    AnotherTest: {
-                        partitionStrategy: 'EqualItemCount',
-                        targetItemCount: 1
-                    }
-                });
-
-                expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(2 + 4);
-                expect(response.ConsumedCapacity).toEqual([
-                    {
-                        CapacityUnits: 60,
-                        TableName: 'Test',
-                        Table: {
-                            CapacityUnits: 10
-                        },
-                        LocalSecondaryIndexes: {
-                            MyLocalIndex: {
-                                CapacityUnits: 30
-                            }
-                        },
-                        GlobalSecondaryIndexes: {
-                            MyGlobalIndex: {
-                                CapacityUnits: 20
-                            }
+                    LocalSecondaryIndexes: {
+                        MyLocalIndex: {
+                            CapacityUnits: 30
                         }
                     },
-                    {
-                        CapacityUnits: 24,
-                        TableName: 'AnotherTest',
-                        Table: {
-                            CapacityUnits: 4
-                        },
-                        LocalSecondaryIndexes: {
-                            MyLocalIndex: {
-                                CapacityUnits: 12
-                            }
-                        },
-                        GlobalSecondaryIndexes: {
-                            MyGlobalIndex: {
-                                CapacityUnits: 8
-                            }
+                    GlobalSecondaryIndexes: {
+                        MyGlobalIndex: {
+                            CapacityUnits: 20
                         }
                     }
-                ]);
+                }
+            ]);
+        });
 
-            }
+        it('should aggregate consumed capacity (TOTAL) when some requests are throttled', async () => {
+            let params = _setupBatchWriteItemParams({
+                returnConsumedCapacity: 'TOTAL'
+            });
+            let mock = _setupDynamoDBWrapper({
+                customResponses: {
+                    1: 'SomeUnprocessedItems'
+                }
+            });
+            let dynamoDB = mock.dynamoDB;
+            let dynamoDBWrapper = mock.dynamoDBWrapper;
 
-            return test();
-        }));
+            spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
+
+            let response = await dynamoDBWrapper.batchWriteItem(params, {
+                partitionStrategy: 'EqualItemCount',
+                targetItemCount: 10
+            });
+
+            expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(2);
+            expect(response.ConsumedCapacity).toEqual([
+                {
+                    CapacityUnits: 60,
+                    TableName: 'Test'
+                }
+            ]);
+        });
+
+        it('should support batch writing to multiple tables', async () => {
+            let params = _setupBatchWriteItemParams({
+                isMultipleTables: true,
+                returnConsumedCapacity: 'INDEXES'
+            });
+            let mock = _setupDynamoDBWrapper();
+            let dynamoDB = mock.dynamoDB;
+            let dynamoDBWrapper = mock.dynamoDBWrapper;
+
+            spyOn(dynamoDB, 'batchWriteItem').and.callThrough();
+
+            let response = await dynamoDBWrapper.batchWriteItem(params, {
+                Test: {
+                    partitionStrategy: 'EqualItemCount',
+                    targetItemCount: 6
+                },
+                AnotherTest: {
+                    partitionStrategy: 'EqualItemCount',
+                    targetItemCount: 1
+                }
+            });
+
+            expect(dynamoDB.batchWriteItem).toHaveBeenCalledTimes(2 + 4);
+            expect(response.ConsumedCapacity).toEqual([
+                {
+                    CapacityUnits: 60,
+                    TableName: 'Test',
+                    Table: {
+                        CapacityUnits: 10
+                    },
+                    LocalSecondaryIndexes: {
+                        MyLocalIndex: {
+                            CapacityUnits: 30
+                        }
+                    },
+                    GlobalSecondaryIndexes: {
+                        MyGlobalIndex: {
+                            CapacityUnits: 20
+                        }
+                    }
+                },
+                {
+                    CapacityUnits: 24,
+                    TableName: 'AnotherTest',
+                    Table: {
+                        CapacityUnits: 4
+                    },
+                    LocalSecondaryIndexes: {
+                        MyLocalIndex: {
+                            CapacityUnits: 12
+                        }
+                    },
+                    GlobalSecondaryIndexes: {
+                        MyGlobalIndex: {
+                            CapacityUnits: 8
+                        }
+                    }
+                }
+            ]);
+
+        });
 
     });
 
